@@ -25,8 +25,10 @@ export const config = {
   // shared across instances) instead of the local SQLite file — needed for jobs to
   // persist on serverless hosts like Vercel. See README "Persisting jobs in production".
   turso: {
-    url: process.env.TURSO_DATABASE_URL || "",
-    authToken: process.env.TURSO_AUTH_TOKEN || "",
+    // Trimmed: pasted env values often carry a stray newline/space, which libSQL
+    // rejects as an invalid URI character.
+    url: (process.env.TURSO_DATABASE_URL || "").trim(),
+    authToken: (process.env.TURSO_AUTH_TOKEN || "").trim(),
   },
 
   astra: {
