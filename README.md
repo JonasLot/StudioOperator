@@ -12,6 +12,19 @@ npm run dev                  # http://localhost:3000
 
 The first request seeds six demo jobs (one per pipeline column, plus an empty Generating column you fill by starting production). **Reset demo** in the header wipes and reseeds.
 
+## Deploy to Vercel
+
+The app runs on Vercel with no configuration — import the GitHub repo and deploy.
+Mock mode is the default, so the live demo needs no API keys.
+
+- The SQLite file is written to `/tmp/studio.db` on Vercel automatically (the rest of the
+  filesystem is read-only). `/tmp` is ephemeral and per-instance, so the demo data reseeds
+  on a cold start — fine for a demo. For durable data, implement the `StudioRepository`
+  interface against Postgres (see **Architecture**) and point `DATABASE_PATH` at a mounted disk
+  on a host that provides one (Render, Railway, Fly.io).
+- To go live instead of mock, set `STUDIO_MOCK_MODE=false` plus the Astra and Higgsfield keys
+  from `.env.example` in the Vercel project's Environment Variables, and read **Before going live**.
+
 ## Workflow
 
 1. **Intake** — New Job: paste the brief, client price, deadline, source, channel fee, reference assets.
