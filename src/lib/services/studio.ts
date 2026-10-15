@@ -27,6 +27,7 @@ import {
   fitsBudget,
 } from "./guardrails";
 import { newId } from "./ids";
+import { runIntakeAnalysis } from "./intake";
 import { buildWorkflow } from "./planner";
 import { planRevision } from "./revisions";
 
@@ -62,6 +63,7 @@ export function getBundle(jobId: string): JobBundle | null {
   return {
     job,
     analysis: repo.getLatestAnalysis(jobId),
+    intake: repo.getLatestIntakeAnalysis(jobId),
     workflow: repo.getCurrentWorkflow(jobId),
     generations: repo.listGenerations(jobId),
     revisions: repo.listRevisions(jobId),
@@ -141,6 +143,12 @@ export async function createJob(input: NewJobInput) {
   };
   repo.insertJob(job);
   log(job.id, "operator", `Brief pasted from ${input.source}. Client price $${input.budget}.`);
+  // Real structured intake analysis (OpenAI Responses / mock) + deterministic decision.
+  try {
+    await runIntakeAnalysis(job);
+  } catch (err) {
+    log(job.id, "system", `Intake analysis could not be stored: ${(err as Error).message}`);
+  }
   await analyzeAndPlan(job.id);
   return job.id;
 }

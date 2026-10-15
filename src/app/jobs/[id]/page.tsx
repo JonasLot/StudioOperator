@@ -31,7 +31,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
   const sp = await props.searchParams;
   const bundle = getBundle(id);
   if (!bundle) notFound();
-  const { job, analysis, workflow, generations, revisions, approvals } = bundle;
+  const { job, analysis, intake, workflow, generations, revisions, approvals } = bundle;
   const p = profitabilityFor(bundle);
   const cfg = publicConfig();
   const pending = approvals.filter((a) => a.status === "pending");
@@ -71,6 +71,11 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
               <a href="#approvals" className="rounded-md bg-warn-soft px-2 py-1 font-medium text-warn">
                 {pending.length} waiting on you
               </a>
+            ) : null}
+            {intake ? (
+              <Link href={`/jobs/${job.id}/review`} className="rounded-md bg-accent px-2 py-1 font-medium text-accent-foreground hover:bg-accent/80">
+                Review analysis →
+              </Link>
             ) : null}
           </div>
         </div>
