@@ -9,9 +9,17 @@ function num(v: string | undefined, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// On read-only serverless hosts (e.g. Vercel) only /tmp is writable, so the
+// SQLite file must live there. Local/long-lived servers keep it in ./data.
+function defaultDatabasePath() {
+  if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
+  if (process.env.VERCEL) return "/tmp/studio.db";
+  return "./data/studio.db";
+}
+
 export const config = {
   mockMode: process.env.STUDIO_MOCK_MODE !== "false",
-  databasePath: process.env.DATABASE_PATH || "./data/studio.db",
+  databasePath: defaultDatabasePath(),
 
   astra: {
     apiKey: process.env.ASTRA_API_KEY || "",
