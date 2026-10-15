@@ -21,6 +21,14 @@ export const config = {
   mockMode: process.env.STUDIO_MOCK_MODE !== "false",
   databasePath: defaultDatabasePath(),
 
+  // When a Turso URL is set, the app uses the remote libSQL database (durable and
+  // shared across instances) instead of the local SQLite file — needed for jobs to
+  // persist on serverless hosts like Vercel. See README "Persisting jobs in production".
+  turso: {
+    url: process.env.TURSO_DATABASE_URL || "",
+    authToken: process.env.TURSO_AUTH_TOKEN || "",
+  },
+
   astra: {
     apiKey: process.env.ASTRA_API_KEY || "",
     baseUrl: (process.env.ASTRA_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),

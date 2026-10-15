@@ -25,6 +25,26 @@ Mock mode is the default, so the live demo needs no API keys.
 - To go live instead of mock, set `STUDIO_MOCK_MODE=false` plus the Astra and Higgsfield keys
   from `.env.example` in the Vercel project's Environment Variables, and read **Before going live**.
 
+## Persisting jobs in production
+
+On Vercel the SQLite file lives in `/tmp`, which is wiped on cold starts and not shared between
+serverless instances — so new jobs don't survive. To make jobs durable, point the app at a
+[Turso](https://turso.tech) (libSQL) database. The same portable `schema.sql` and SQL are reused;
+the only change is the driver, selected automatically when `TURSO_DATABASE_URL` is set.
+
+```bash
+turso db create studio-operator
+turso db show studio-operator --url          # -> TURSO_DATABASE_URL
+turso db tokens create studio-operator       # -> TURSO_AUTH_TOKEN
+```
+
+Set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the Vercel project's Environment Variables and
+redeploy. Locally, with neither set, the app keeps using the SQLite file — no code changes needed.
+
+Alternatively, deploy to a host with a persistent disk (Render, Railway, Fly.io) and point
+`DATABASE_PATH` at the mounted volume; the local SQLite driver then persists jobs as-is. For a full
+SQL database, implement the `StudioRepository` interface against Postgres (see **Architecture**).
+
 ## Workflow
 
 1. **Intake** — New Job: paste the brief, client price, deadline, source, channel fee, reference assets.

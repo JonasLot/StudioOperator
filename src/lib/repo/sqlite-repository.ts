@@ -1,7 +1,6 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
 import type {
   ActivityEvent,
   ApprovalRequest,
@@ -13,6 +12,22 @@ import type {
   WorkflowStep,
 } from "@/lib/domain/types";
 import type { StudioRepository } from "./repository";
+
+/**
+ * Minimal structural type for a synchronous, better-sqlite3-compatible driver.
+ * Satisfied by both `better-sqlite3` (local file) and `libsql` (remote Turso),
+ * so one repository implementation serves both backends.
+ */
+export interface SqlStatement {
+  run(...params: unknown[]): unknown;
+  all(...params: unknown[]): unknown[];
+  get(...params: unknown[]): unknown;
+}
+export interface SqlDatabase {
+  prepare(sql: string): SqlStatement;
+  exec(sql: string): unknown;
+  transaction<T>(fn: () => T): () => T;
+}
 
 // ---------- generic row <-> object mapping ----------
 
@@ -36,6 +51,7 @@ function fromRow<T>(row: Record<string, unknown> | undefined, spec: FieldSpec): 
   if (!row) return null;
   const obj: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) {
+    if (k === "_metadata") continue; // libsql attaches per-row metadata; not a column
     const key = camel(k);
     if (spec.json?.includes(key)) obj[key] = v == null ? null : JSON.parse(String(v));
     else if (spec.bool?.includes(key)) obj[key] = v === 1;
@@ -82,14 +98,13 @@ const SPEC = {
 // ---------- repository ----------
 
 export class SqliteStudioRepository implements StudioRepository {
-  private db: Database.Database;
+  private db: SqlDatabase;
 
-  constructor(file: string) {
-    const abs = path.resolve(file);
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    this.db = new Database(abs);
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("foreign_keys = ON");
+  // Takes an already-opened driver (see repo/index.ts) so the same SQL serves
+  // both the local SQLite file and a remote Turso database. The portable schema
+  // is applied idempotently (CREATE TABLE IF NOT EXISTS) on construction.
+  constructor(db: SqlDatabase) {
+    this.db = db;
     const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/repo/schema.sql"), "utf8");
     this.db.exec(schema);
   }
