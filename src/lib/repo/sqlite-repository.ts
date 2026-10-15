@@ -62,14 +62,15 @@ function fromRow<T>(row: Record<string, unknown> | undefined, spec: FieldSpec): 
 
 const q = (col: string) => `"${col}"`;
 
-function insertSql(table: string, row: Record<string, unknown>) {
-  const cols = Object.keys(row);
-  return `INSERT INTO ${table} (${cols.map(q).join(",")}) VALUES (${cols.map((c) => "@" + c).join(",")})`;
+// Positional (?) parameters, not named (@name): libSQL's remote (Hrana) protocol
+// does not bind named parameters the way better-sqlite3 and the local file driver
+// do, which silently left columns NULL. Positional binds identically everywhere.
+function insertSql(table: string, cols: string[]) {
+  return `INSERT INTO ${table} (${cols.map(q).join(",")}) VALUES (${cols.map(() => "?").join(",")})`;
 }
 
-function updateSql(table: string, row: Record<string, unknown>) {
-  const cols = Object.keys(row);
-  return `UPDATE ${table} SET ${cols.map((c) => `${q(c)} = @${c}`).join(", ")} WHERE id = @__id`;
+function updateSql(table: string, cols: string[]) {
+  return `UPDATE ${table} SET ${cols.map((c) => `${q(c)} = ?`).join(", ")} WHERE id = ?`;
 }
 
 const SPEC = {
@@ -115,13 +116,15 @@ export class SqliteStudioRepository implements StudioRepository {
 
   private insert(table: string, obj: object, spec: FieldSpec) {
     const row = toRow(obj as Record<string, unknown>, spec);
-    this.db.prepare(insertSql(table, row)).run(row);
+    const cols = Object.keys(row);
+    this.db.prepare(insertSql(table, cols)).run(...cols.map((c) => row[c]));
   }
 
   private patch(table: string, id: string, patch: object, spec: FieldSpec) {
     const row = toRow(patch as Record<string, unknown>, spec);
-    if (Object.keys(row).length === 0) return;
-    this.db.prepare(updateSql(table, row)).run({ ...row, __id: id });
+    const cols = Object.keys(row);
+    if (cols.length === 0) return;
+    this.db.prepare(updateSql(table, cols)).run(...cols.map((c) => row[c]), id);
   }
 
   private all<T>(sql: string, spec: FieldSpec, ...params: unknown[]): T[] {
