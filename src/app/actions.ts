@@ -3,9 +3,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { safeParseAnalysis, type Analysis } from "@/lib/analysis/schema";
 import { JOB_SOURCES } from "@/lib/domain/types";
 import { resetDemo } from "@/lib/seed";
 import { GuardrailError } from "@/lib/services/guardrails";
+import * as intake from "@/lib/services/intake";
 import * as studio from "@/lib/services/studio";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -112,6 +114,16 @@ export async function runRevisionAction(jobId: string, revisionId: string) {
 export async function approveDeliveryAction(jobId: string, attestation: string) {
   return run(jobId, () => studio.approveFinalDelivery(jobId, attestation), "Final delivery approved.");
 }
+export async function reviewIntakeAction(jobId: string, edited: Analysis, action: "save" | "approve" | "reject"): Promise<ActionResult> {
+  const parsed = safeParseAnalysis(edited);
+  if (!parsed.ok) return { ok: false, error: `Analysis is invalid: ${parsed.error}` };
+  return run(
+    jobId,
+    () => intake.reviewIntake(jobId, { edited: parsed.analysis, action }),
+    action === "approve" ? "Analysis approved." : action === "reject" ? "Job rejected." : "Edits saved.",
+  );
+}
+
 export async function resetDemoAction() {
   await resetDemo();
   revalidatePath("/", "layout");

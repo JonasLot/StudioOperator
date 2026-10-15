@@ -45,6 +45,27 @@ Alternatively, deploy to a host with a persistent disk (Render, Railway, Fly.io)
 `DATABASE_PATH` at the mounted volume; the local SQLite driver then persists jobs as-is. For a full
 SQL database, implement the `StudioRepository` interface against Postgres (see **Architecture**).
 
+## Brief analysis (GPT-6 Astra)
+
+Pasting a brief runs a structured intake analysis. With `OPENAI_API_KEY` set it calls the
+real model (`gpt-6-astra`) through the **OpenAI Responses API** with **Structured Outputs**,
+so the JSON is validated against the schema (`src/lib/analysis/schema.ts`) before anything is
+written to the database. Without a key — or if the call or validation fails — a deterministic
+offline analyzer produces the same schema, so the flow always works. The API key is read only
+on the server (`src/lib/config.ts`).
+
+The model never prices anything: it proposes each step by the **capability** it needs and an
+attempt estimate. The application resolves each capability to a catalogued model and computes
+cost deterministically (`src/lib/analysis/cost.ts`), then makes the final **accept /
+human_review / reject** call (`src/lib/analysis/decision.ts`) from catalog prices, source/channel
+fees, contingency, the approved attempt limits and the configured production budget. If a step
+has no catalogue price, the job is routed to human review rather than guessing.
+
+Open **Review analysis** on a job to edit any extracted field and approve or reject it. Both the
+original analysis and the human-edited version are stored for comparison. Tests for the schema,
+malformed responses, missing fields and the deterministic decision rules live beside the code
+(`src/lib/analysis/*.test.ts`); run them with `npm test`.
+
 ## Workflow
 
 1. **Intake** — New Job: paste the brief, client price, deadline, source, channel fee, reference assets.

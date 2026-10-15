@@ -1,6 +1,9 @@
 // Core domain records for Studio Operator.
 // These are persistence-agnostic: the repository layer maps them to/from storage.
 
+import type { Analysis } from "@/lib/analysis/schema";
+import type { FinalDecision } from "@/lib/analysis/decision";
+
 export const JOB_SOURCES = ["upwork", "fiverr", "contra", "email", "direct"] as const;
 export type JobSource = (typeof JOB_SOURCES)[number];
 
@@ -180,9 +183,34 @@ export interface ActivityEvent {
   createdAt: string;
 }
 
+export type ReviewStatus = "pending" | "approved" | "rejected";
+
+/**
+ * The structured intake analysis (OpenAI Responses / mock) plus the application's
+ * deterministic decision. `original` is exactly what the analyzer produced;
+ * `edited` is the human-reviewed version (null until a human saves edits), so the
+ * two can be compared. The effective analysis is `edited ?? original`.
+ */
+export interface IntakeAnalysis {
+  id: string;
+  jobId: string;
+  analyzer: string; // "gpt-6-astra" | "mock-astra" | "mock-astra (fallback)"
+  original: Analysis;
+  edited: Analysis | null;
+  decision: FinalDecision; // deterministic app decision on the effective analysis
+  decisionReasons: string[];
+  estimatedSpend: number; // deterministic catalog-priced estimate, USD
+  reviewStatus: ReviewStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  warning: string | null;
+  createdAt: string;
+}
+
 export interface JobBundle {
   job: Job;
   analysis: BriefAnalysis | null;
+  intake: IntakeAnalysis | null;
   workflow: Workflow | null;
   generations: Generation[];
   revisions: Revision[];

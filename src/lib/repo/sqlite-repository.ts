@@ -6,6 +6,7 @@ import type {
   ApprovalRequest,
   BriefAnalysis,
   Generation,
+  IntakeAnalysis,
   Job,
   Revision,
   Workflow,
@@ -88,6 +89,7 @@ const SPEC = {
       "rationale",
     ],
   },
+  intake: { json: ["original", "edited", "decisionReasons"] },
   workflow: {},
   step: { json: ["inputs", "expectedOutputs", "deliverableIds"] },
   generation: { bool: ["selected"] },
@@ -171,6 +173,20 @@ export class SqliteStudioRepository implements StudioRepository {
   }
   insertAnalysis(a: BriefAnalysis) {
     this.insert("brief_analyses", a, SPEC.analysis);
+  }
+
+  // intake analyses (structured, with original vs human-edited)
+  getLatestIntakeAnalysis(jobId: string) {
+    return this.one<IntakeAnalysis>("SELECT * FROM intake_analyses WHERE job_id = ? ORDER BY created_at DESC LIMIT 1", SPEC.intake, jobId);
+  }
+  getIntakeAnalysis(id: string) {
+    return this.one<IntakeAnalysis>("SELECT * FROM intake_analyses WHERE id = ?", SPEC.intake, id);
+  }
+  insertIntakeAnalysis(a: IntakeAnalysis) {
+    this.insert("intake_analyses", a, SPEC.intake);
+  }
+  updateIntakeAnalysis(id: string, patch: Partial<IntakeAnalysis>) {
+    this.patch("intake_analyses", id, patch, SPEC.intake);
   }
 
   // workflows
@@ -274,7 +290,7 @@ export class SqliteStudioRepository implements StudioRepository {
 
   wipe() {
     this.db.exec(
-      "DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM brief_analyses; DELETE FROM jobs;",
+      "DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM brief_analyses; DELETE FROM jobs;",
     );
   }
 }
