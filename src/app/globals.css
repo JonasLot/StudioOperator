@@ -1,0 +1,144 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn/ui neutral theme, tuned quieter for an operational tool */
+:root {
+  --radius: 0.625rem;
+  /* warm paper neutrals */
+  --background: oklch(0.977 0.004 80);
+  --foreground: oklch(0.22 0.012 60);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.012 60);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.012 60);
+  --sidebar: oklch(0.99 0.002 80);
+  /* primary is a deep slate, used for the one main action on a screen */
+  --primary: oklch(0.29 0.018 255);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.955 0.005 80);
+  --secondary-foreground: oklch(0.27 0.012 60);
+  --muted: oklch(0.955 0.005 80);
+  --muted-foreground: oklch(0.54 0.012 70);
+  --accent: oklch(0.955 0.008 70);
+  --accent-foreground: oklch(0.25 0.012 60);
+  --destructive: oklch(0.55 0.2 27);
+  --border: oklch(0.915 0.006 80);
+  --input: oklch(0.9 0.006 80);
+  --ring: oklch(0.64 0.12 45);
+
+  /* brand: terracotta, used for wayfinding (active nav, tab underline, mark) */
+  --brand: oklch(0.63 0.13 45);
+  --brand-soft: oklch(0.955 0.022 60);
+
+  /* status hues — used sparingly */
+  --ok: oklch(0.56 0.09 165);
+  --ok-soft: oklch(0.955 0.028 165);
+  --warn: oklch(0.6 0.11 70);
+  --warn-soft: oklch(0.96 0.035 80);
+  --bad: oklch(0.55 0.15 25);
+  --bad-soft: oklch(0.96 0.025 25);
+  --info: oklch(0.52 0.09 255);
+  --info-soft: oklch(0.96 0.02 255);
+  --lilac: oklch(0.55 0.06 290);
+  --steel: oklch(0.5 0.03 200);
+}
+
+.dark {
+  --background: oklch(0.17 0.004 260);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.205 0.004 260);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.205 0.004 260);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.93 0 0);
+  --primary-foreground: oklch(0.2 0.005 260);
+  --secondary: oklch(0.26 0.005 260);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.26 0.005 260);
+  --muted-foreground: oklch(0.7 0.01 260);
+  --accent: oklch(0.27 0.005 260);
+  --accent-foreground: oklch(0.95 0 0);
+  --destructive: oklch(0.65 0.19 25);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.55 0.01 260);
+  --ok: oklch(0.72 0.12 155);
+  --ok-soft: oklch(0.3 0.05 155);
+  --warn: oklch(0.78 0.12 80);
+  --warn-soft: oklch(0.32 0.05 80);
+  --bad: oklch(0.7 0.16 27);
+  --bad-soft: oklch(0.32 0.06 27);
+  --info: oklch(0.72 0.11 250);
+  --info-soft: oklch(0.3 0.05 250);
+  --sidebar: oklch(0.19 0.004 260);
+  --brand: oklch(0.72 0.12 50);
+  --brand-soft: oklch(0.3 0.04 50);
+  --lilac: oklch(0.72 0.07 290);
+  --steel: oklch(0.7 0.03 200);
+}
+
+@theme inline {
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-sidebar: var(--sidebar);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-lilac: var(--lilac);
+  --color-steel: var(--steel);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@utility eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted-foreground);
+}
