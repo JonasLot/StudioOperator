@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/analysis/*.test.ts src/lib/router/*.test.ts"
+    "test": "node --import tsx --test src/lib/analysis/*.test.ts src/lib/router/*.test.ts src/lib/qa/*.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.3.1",

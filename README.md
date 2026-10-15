@@ -10,7 +10,9 @@ cp .env.example .env.local   # optional — mock mode is the default
 npm run dev                  # http://localhost:3000
 ```
 
-The first request seeds six demo jobs (one per pipeline column, plus an empty Generating column you fill by starting production). **Reset demo** in the header wipes and reseeds.
+The first request seeds eight demo jobs (one per pipeline column, plus the two fully-produced showcase briefs used by the recording view). **Reset demo** in the header wipes and reseeds.
+
+For a presenter-friendly walkthrough open **`/present`** (see *Recording mode* below).
 
 ## Deploy to Vercel
 
@@ -97,6 +99,34 @@ spend; after approval the agent operates only inside those limits.
 5. **Human approval** — rights clearance (if flagged) and the workflow + maximum generation budget.
 6. **Production** — the agent runs steps in order only while committed spend + next estimate fits under the cap; otherwise it pauses and requests a budget increase.
 7. **QA & revisions** — select takes, log client notes. Notes that fit the remaining cap are auto-approved; scope changes and overruns wait for you. Final delivery always needs approval.
+
+## Automated QA & self-repair
+
+Each completed output is scored against the approved brief (`src/lib/qa/qa.ts`, pure and unit-tested) into a structured checklist:
+
+- **Structural (real):** deliverable type, aspect ratio, resolution, duration — compared against the planned deliverable and the step's own output modality (a look-development step is graded as an *image*, not against the final video).
+- **Perceptual (heuristic in mock):** product/brand consistency, verbatim text/label/spelling, required scenes, prohibited elements, and — only when the brief actually involves people — faces, hands, motion, continuity, audio and lip-sync. An explicit *"no people"* brief suppresses the face/hand checks. With no vision model in mock mode these are deterministic simulations seeded by the generation id and clearly labelled *(heuristic)*.
+
+Each output gets a verdict: **acceptable as a concept / needs a controlled edit / needs regeneration / ready for human delivery review**.
+
+When the verdict calls for a fix, `src/lib/qa/repair.ts` proposes a **targeted repair** and shows its economics up front — reason, selected model, expected incremental cost, new total, updated margin. A repair runs automatically **only** within the pre-approved limits (per-repair, per-job, and max auto-repairs — `QA_PER_REPAIR_MAX_USD`, `QA_PER_JOB_REPAIR_MAX_USD`, `QA_MAX_AUTO_REPAIRS`, `QA_REPAIR_ATTEMPTS`, all in `src/lib/config.ts`). Anything over a limit is recommended but requires human approval; the blocking limit is named.
+
+## Recording mode (`/present`)
+
+A single-screen walkthrough built for screen-recording the whole flow (`src/app/present/page.tsx` + `presenter.tsx`):
+
+- **Large status labels** and a **step-through control** (Brief → Analysis → Approval → Generation → QA → Delivery) so you can pause before each stage.
+- **One-click reset** to the seeded briefs.
+- A **cost ledger** (every generation attempt: model, take, status, estimate, recorded spend + total) and a **side-by-side profit strip** (client price · channel fee · API cost · contingency · expected gross profit).
+- The **QA checklist** per output with its verdict and the transparent repair decision.
+- A **final-deliverables grid** with download links and a **client-ready delivery note drafted by Astra**.
+
+Two showcase briefs demonstrate different routes:
+
+- **After the Rain: Glass Monument** — a fixed-package cinematic film in 9:16 **and** 16:9 plus three approved keyframes. Route: cheap concept keyframes → premium cinematic motion (Cinema Studio) → edit → finishing, with a targeted *continuity/reflection* repair.
+- **Night Orchard: Slow Orbit** — one atmospheric sequence around a smooth orbiting camera move plus a hero still. A *different* route built on Kling O3 image-reference to hold spatial continuity through the orbit.
+
+Mock mode is enforced for the demo — the header shows a **"no external calls, no secrets"** badge and the browser never receives API keys or private client data (`publicConfig()` strips them).
 
 ## Guardrails
 
