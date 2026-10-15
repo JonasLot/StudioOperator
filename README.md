@@ -66,6 +66,28 @@ original analysis and the human-edited version are stored for comparison. Tests 
 malformed responses, missing fields and the deterministic decision rules live beside the code
 (`src/lib/analysis/*.test.ts`); run them with `npm test`.
 
+## Model router (transparent)
+
+The **Model router** screen proposes a staged route for a brief and explains it — it is not a black box.
+Models are grouped by production role in a configurable capability catalog (`src/lib/router/catalog.ts`):
+
+- **SEARCH** — cheap/fast lanes for many hooks, compositions and rough concepts.
+- **CONTROL** — preserve a product, face, character, motion, layout, logo, label or exact text.
+- **SHIP** — premium models for the final client-facing asset.
+- **FINISH** — upscale, denoise, lip sync, voice, captions, localization and export.
+
+For the brief's signals (deliverable, reference/identity, exact text/packaging, resolution, duration,
+deadline, attempts, price, target margin) the router proposes a route like *generate 8 concepts → choose 2 →
+controlled keyframes → final motion → repair a continuity failure if needed → upscale → QA*. Every stage shows
+the selected model, why it fits, its known failure mode, an alternative, estimated attempts, cost per attempt
+and the maximum authorized spend. A manual model override recalculates the economics instantly
+(`src/lib/router/route.ts`). Nothing runs until the human approves the initial paid workflow and a maximum
+spend; after approval the agent operates only inside those limits.
+
+> The catalog's model families, capabilities and costs are **seeded from routing principles and not yet verified
+> against the live Higgsfield catalog** (the docs host is unreachable from the build environment). Entries marked
+> "confirm" in the UI are pending verification; prices drive the economics, so confirm them before any paid run.
+
 ## Workflow
 
 1. **Intake** — New Job: paste the brief, client price, deadline, source, channel fee, reference assets.

@@ -1,54 +1,70 @@
 import { BadgeCheck, CircleDashed } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { CATEGORY_LABEL, type ModelCategory } from "@/lib/domain/types";
-import { MODEL_CATALOG } from "@/lib/higgsfield/catalog";
+import { byRole, ROLE_META, ROUTER_ROLES } from "@/lib/router/catalog";
 import { usd } from "@/lib/utils";
+import { RouterStudio } from "./router-studio";
 
 export const dynamic = "force-dynamic";
 
-const ORDER: ModelCategory[] = ["image", "video", "voice", "editing", "finishing"];
+const ROLE_ACCENT: Record<string, string> = {
+  search: "text-info",
+  control: "text-warn",
+  ship: "text-brand",
+  finish: "text-ok",
+};
 
 export default function ModelsPage() {
   return (
     <div className="flex flex-col gap-10">
       <PageHeader
         eyebrow="Workspace / Model router"
-        title="Which model does what."
-        subtitle="The planner routes each production step to one of these Higgsfield models. Unit costs drive every estimate and margin, so keep them honest."
+        title="A transparent route, not a black box."
+        subtitle="The router proposes a staged route, explains why each model fits, shows alternatives and known failure modes, and prices it — but nothing runs until you approve the workflow and a maximum spend."
       />
-      {ORDER.map((cat) => {
-        const models = MODEL_CATALOG.filter((m) => m.category === cat);
-        return (
-          <section key={cat}>
-            <h2 className="eyebrow mb-3">{CATEGORY_LABEL[cat]}</h2>
+
+      <RouterStudio />
+
+      <section className="flex flex-col gap-6">
+        <div>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Capability catalog</h2>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Grouped by production role. Configurable in <code className="font-mono text-[12px]">src/lib/router/catalog.ts</code>. Entries marked <em>confirm</em> are seeded from routing principles and
+            not yet verified against the live Higgsfield catalog or its documented model pages.
+          </p>
+        </div>
+        {ROUTER_ROLES.map((role) => (
+          <div key={role}>
+            <h3 className={`eyebrow mb-1 ${ROLE_ACCENT[role]}`}>{ROLE_META[role].label}</h3>
+            <p className="mb-3 text-[12.5px] text-muted-foreground">{ROLE_META[role].blurb}</p>
             <div className="overflow-hidden rounded-xl border bg-card">
               <ul className="divide-y">
-                {models.map((m) => (
-                  <li key={m.id} className="grid gap-2 px-6 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px] md:items-center">
+                {byRole(role).map((m) => (
+                  <li key={m.id} className="grid gap-2 px-5 py-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_150px] md:items-start">
                     <div>
-                      <div className="flex items-center gap-2 text-[14.5px] font-medium">
+                      <div className="flex flex-wrap items-center gap-2 text-[14px] font-medium">
                         {m.label}
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">{m.family}</span>
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">{m.medium.replace("_", " ")}</span>
                         {m.verified ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-ok-soft px-1.5 py-0.5 text-[11px] text-ok"><BadgeCheck className="size-3" /> Verified endpoint</span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-ok-soft px-1.5 py-0.5 text-[11px] text-ok"><BadgeCheck className="size-3" /> verified</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"><CircleDashed className="size-3" /> Confirm endpoint</span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"><CircleDashed className="size-3" /> confirm</span>
                         )}
                       </div>
-                      <div className="mt-0.5 text-[13px] text-muted-foreground">{m.strengths}</div>
+                      <div className="mt-1 text-[13px] text-muted-foreground">{m.strengths}</div>
                     </div>
-                    <code className="truncate font-mono text-[12px] text-muted-foreground">POST {m.endpoint}</code>
+                    <div className="text-[12.5px] text-muted-foreground"><span className="text-foreground/70">Fails by:</span> {m.failureMode}</div>
                     <div className="tnum md:text-right">
-                      <span className="text-[15px] font-semibold">{usd(m.unitCostUsd, { cents: true })}</span>
-                      <span className="ml-1 text-[12px] text-muted-foreground">{m.unitLabel}</span>
+                      <div><span className="text-[15px] font-semibold">{usd(m.costPerAttemptUsd, { cents: true })}</span> <span className="text-[12px] text-muted-foreground">{m.unitLabel}</span></div>
+                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">{m.speed} · {m.typicalQueue}</div>
                     </div>
                   </li>
                 ))}
               </ul>
             </div>
-          </section>
-        );
-      })}
-      <p className="text-[12.5px] text-muted-foreground">Unit costs are planning placeholders until replaced with your Higgsfield credit pricing in <code className="font-mono">src/lib/higgsfield/catalog.ts</code>.</p>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
