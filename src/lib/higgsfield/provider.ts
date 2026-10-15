@@ -1,7 +1,30 @@
 import "server-only";
-import { config, higgsfieldLive } from "@/lib/config";
+import { higgsfieldLive } from "@/lib/config";
 import type { Generation, GenerationStatus } from "@/lib/domain/types";
 import { getModel } from "./catalog";
+import { WIRE_CAPABILITIES, wireCancel, wireConnectionTest, wirePoll, wireSubmit } from "./wire";
+
+// ---------------------------------------------------------------------------
+// Provider adapter boundary.
+//
+// The rest of the product talks only to this interface, never to Higgsfield
+// directly. Outputs are normalized into one internal asset shape regardless of
+// media type (image / video / audio). The live Higgsfield mapping lives behind
+// `wire.ts` and is isolated + unverified; the mock implementation is complete
+// and always available.
+// ---------------------------------------------------------------------------
+
+/** One internal asset shape for every media type the provider can return. */
+export interface ProviderAsset {
+  kind: "image" | "video" | "audio";
+  url: string;
+}
+
+export interface ProviderCapabilities {
+  estimate: boolean; // supports a pre-generation cost estimate
+  cancel: boolean; // supports provider-side cancellation
+  webhooks: boolean; // supports completion webhooks
+}
 
 export interface SubmitInput {
   generationId: string;
@@ -10,29 +33,40 @@ export interface SubmitInput {
   imageUrls?: string[];
   costEstimate: number;
 }
-
 export interface SubmitResult {
   providerRequestId: string;
   statusUrl: string | null;
+  cancelUrl: string | null;
   status: GenerationStatus;
 }
-
 export interface PollResult {
   status: GenerationStatus;
-  outputUrl?: string | null;
-  outputType?: "image" | "video" | "audio" | null;
-  actualCost?: number | null;
+  asset?: ProviderAsset | null;
+  actualCost?: number | null; // provider-reported spend, when available
   error?: string | null;
+}
+export interface EstimateResult {
+  estimatedCost: number | null;
+  detail: string;
+}
+export interface ConnectionTestResult {
+  ok: boolean;
+  detail: string;
 }
 
 export interface GenerationProvider {
   name: "higgsfield" | "mock";
+  live: boolean;
+  capabilities: ProviderCapabilities;
   submit(input: SubmitInput): Promise<SubmitResult>;
   poll(gen: Generation): Promise<PollResult>;
+  estimate?(input: SubmitInput): Promise<EstimateResult>;
+  cancel?(gen: Generation): Promise<{ status: GenerationStatus }>;
+  connectionTest(): Promise<ConnectionTestResult>;
 }
 
 // ---------------------------------------------------------------------------
-// Mock provider — deterministic, time-based progress so the whole UI can be exercised offline.
+// Mock provider — deterministic, time-based progress; fully offline.
 // ---------------------------------------------------------------------------
 
 function hash(s: string) {
@@ -46,8 +80,10 @@ const MOCK_RENDER_MS = 4500;
 
 export const mockProvider: GenerationProvider = {
   name: "mock",
+  live: false,
+  capabilities: { estimate: true, cancel: true, webhooks: false },
   async submit(input) {
-    return { providerRequestId: `mock_${input.generationId.slice(-10)}`, statusUrl: null, status: "queued" };
+    return { providerRequestId: `mock_${input.generationId.slice(-10)}`, statusUrl: null, cancelUrl: `mock-cancel:${input.generationId}`, status: "queued" };
   },
   async poll(gen) {
     const started = new Date(gen.startedAt ?? gen.createdAt).getTime();
@@ -55,78 +91,55 @@ export const mockProvider: GenerationProvider = {
     if (elapsed < MOCK_QUEUE_MS) return { status: "queued" };
     if (elapsed < MOCK_QUEUE_MS + MOCK_RENDER_MS) return { status: "in_progress" };
     const h = hash(gen.id);
-    if (h % 19 === 0) {
-      return { status: "failed", error: "Mock provider: render timed out at 120s (simulated)", actualCost: 0 };
-    }
+    if (h % 19 === 0) return { status: "failed", error: "Mock provider: simulated render failure", actualCost: 0 };
     const model = getModel(gen.model);
-    const variance = 0.9 + ((h % 26) / 100); // 0.90 – 1.15
+    const variance = 0.9 + (h % 26) / 100; // 0.90 – 1.15
     return {
       status: "completed",
-      outputUrl: `/api/mock-output/${gen.id}`,
-      outputType: model.output,
+      asset: { kind: model.output, url: `/api/mock-output/${gen.id}` },
       actualCost: Math.round(gen.costEstimate * variance * 100) / 100,
     };
+  },
+  async estimate(input) {
+    // In mock mode the catalog estimate is authoritative; echo it so the
+    // "estimate before paid generation" path is exercised end-to-end.
+    return { estimatedCost: input.costEstimate, detail: "Mock estimate (equals catalog estimate)." };
+  },
+  async cancel() {
+    return { status: "canceled" };
+  },
+  async connectionTest() {
+    return { ok: true, detail: "Mock provider — no network call and no cost." };
   },
 };
 
 // ---------------------------------------------------------------------------
-// Higgsfield live provider — https://docs.higgsfield.ai
-//   POST {base}/{model endpoint}   Authorization: Key {id}:{secret}, Idempotency-Key
-//   -> { request_id, status_url, cancel_url, status }
-//   GET status_url -> { status: queued|in_progress|completed|failed|nsfw|canceled, images[] | video | audio }
+// Higgsfield live provider — delegates every wire detail to wire.ts, which is
+// isolated and refuses to run until its mapping is verified against the docs.
 // ---------------------------------------------------------------------------
-
-function authHeader() {
-  return `Key ${config.higgsfield.apiKeyId}:${config.higgsfield.apiKeySecret}`;
-}
 
 export const higgsfieldProvider: GenerationProvider = {
   name: "higgsfield",
+  live: true,
+  capabilities: WIRE_CAPABILITIES,
   async submit(input) {
-    const model = getModel(input.modelId);
-    const res = await fetch(`${config.higgsfield.baseUrl}${model.endpoint}`, {
-      method: "POST",
-      headers: {
-        Authorization: authHeader(),
-        "Content-Type": "application/json",
-        "Idempotency-Key": input.generationId,
-      },
-      body: JSON.stringify({
-        prompt: input.prompt,
-        ...(input.imageUrls?.length ? { image_urls: input.imageUrls } : {}),
-      }),
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`Higgsfield submit failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
-    const body = (await res.json()) as { request_id: string; status_url?: string; status?: GenerationStatus };
-    return {
-      providerRequestId: body.request_id,
-      statusUrl: body.status_url ?? `${config.higgsfield.baseUrl}/requests/${body.request_id}/status`,
-      status: body.status ?? "queued",
-    };
+    const r = await wireSubmit({ generationId: input.generationId, modelId: input.modelId, prompt: input.prompt, imageUrls: input.imageUrls });
+    return { providerRequestId: r.providerRequestId, statusUrl: r.statusUrl, cancelUrl: r.cancelUrl, status: r.status };
   },
   async poll(gen) {
-    const url = gen.statusUrl ?? `${config.higgsfield.baseUrl}/requests/${gen.providerRequestId}/status`;
-    const res = await fetch(url, { headers: { Authorization: authHeader() }, cache: "no-store" });
-    if (!res.ok) return { status: gen.status, error: `Status check failed (${res.status})` };
-    const body = (await res.json()) as {
-      status: GenerationStatus;
-      images?: { url: string }[];
-      video?: { url: string };
-      audio?: { url: string };
-      audios?: { url: string }[];
-      error?: string;
+    const r = await wirePoll(gen);
+    return {
+      status: r.status,
+      asset: r.assetUrl && r.assetKind ? { kind: r.assetKind, url: r.assetUrl } : null,
+      actualCost: r.actualCost,
+      error: r.error,
     };
-    if (body.status === "completed") {
-      const outputUrl = body.video?.url ?? body.images?.[0]?.url ?? body.audio?.url ?? body.audios?.[0]?.url ?? null;
-      const outputType = body.video ? "video" : body.images ? "image" : body.audio || body.audios ? "audio" : null;
-      // Higgsfield bills in credits; the status payload does not report spend, so actual cost stays null
-      // until reconciled from the console. Budget guardrails fall back to the estimate.
-      return { status: "completed", outputUrl, outputType, actualCost: null };
-    }
-    if (body.status === "nsfw") return { status: "nsfw", error: "Rejected by provider content moderation" };
-    if (body.status === "failed") return { status: "failed", error: body.error ?? "Provider reported failure" };
-    return { status: body.status };
+  },
+  async cancel(gen) {
+    return wireCancel(gen);
+  },
+  async connectionTest() {
+    return wireConnectionTest();
   },
 };
 

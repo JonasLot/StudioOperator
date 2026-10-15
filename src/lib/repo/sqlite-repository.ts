@@ -9,6 +9,7 @@ import type {
   IntakeAnalysis,
   Job,
   Revision,
+  StoredAsset,
   Workflow,
   WorkflowStep,
 } from "@/lib/domain/types";
@@ -96,6 +97,7 @@ const SPEC = {
   revision: { bool: ["materialChange", "requiresApproval"] },
   approval: {},
   activity: {},
+  asset: {},
 } satisfies Record<string, FieldSpec>;
 
 // ---------- repository ----------
@@ -110,6 +112,20 @@ export class SqliteStudioRepository implements StudioRepository {
     this.db = db;
     const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/repo/schema.sql"), "utf8");
     this.db.exec(schema);
+    this.migrate();
+  }
+
+  // Idempotent additive migrations for databases created before a column existed.
+  // CREATE TABLE IF NOT EXISTS does not add columns to an existing table, so new
+  // nullable columns are added here; a duplicate-column error just means it's present.
+  private migrate() {
+    for (const sql of ["ALTER TABLE generations ADD COLUMN timed_out_at TEXT"]) {
+      try {
+        this.db.exec(sql);
+      } catch {
+        /* column already exists */
+      }
+    }
   }
 
   transaction<T>(fn: () => T): T {
@@ -288,9 +304,16 @@ export class SqliteStudioRepository implements StudioRepository {
     this.insert("activity", e, SPEC.activity);
   }
 
+  insertAsset(a: StoredAsset) {
+    this.insert("assets", a, SPEC.asset);
+  }
+  getAsset(id: string) {
+    return this.one<StoredAsset>("SELECT * FROM assets WHERE id = ?", SPEC.asset, id);
+  }
+
   wipe() {
     this.db.exec(
-      "DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM brief_analyses; DELETE FROM jobs;",
+      "DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM brief_analyses; DELETE FROM jobs;",
     );
   }
 }

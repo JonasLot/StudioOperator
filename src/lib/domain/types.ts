@@ -128,9 +128,26 @@ export interface Generation {
   outputType: "image" | "video" | "audio" | null;
   selected: boolean;
   error: string | null;
+  // Application-level timeout: set when polling exceeds the configured limit.
+  // Kept separate from `status` so an internal timeout is never misreported as a
+  // provider status.
+  timedOutAt: string | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+/** A completed output copied into application-controlled storage (provider URLs expire). */
+export interface StoredAsset {
+  id: string;
+  generationId: string;
+  jobId: string;
+  kind: "image" | "video" | "audio";
+  mime: string;
+  data: string; // base64 bytes
+  sourceUrl: string | null; // original provider URL, for reference
+  bytes: number;
+  createdAt: string;
 }
 
 export type RevisionAction = "regenerate_shot" | "regrade" | "fix_text" | "rerecord_voice" | "re_edit" | "new_deliverable" | "clarify";

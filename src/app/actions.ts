@@ -105,6 +105,16 @@ export async function retryStepAction(jobId: string, stepId: string) {
 export async function toggleSelectAction(jobId: string, generationId: string) {
   return run(jobId, () => studio.toggleSelect(generationId));
 }
+export async function cancelGenerationAction(jobId: string, generationId: string) {
+  return run(jobId, () => studio.cancelGeneration(jobId, generationId), "Generation cancelled.");
+}
+export async function retryGenerationAction(jobId: string, generationId: string) {
+  return run(jobId, () => studio.retryGeneration(jobId, generationId), "Retrying as a new attempt.");
+}
+export async function connectionTestAction(): Promise<ActionResult & { detail?: string; providerName?: string; live?: boolean }> {
+  const r = await studio.providerConnectionTest();
+  return r.ok ? { ok: true, message: r.detail, detail: r.detail, providerName: r.name, live: r.live } : { ok: false, error: r.detail, detail: r.detail, providerName: r.name, live: r.live };
+}
 export async function addRevisionAction(jobId: string, note: string, deliverable: string | null) {
   return run(jobId, () => studio.addRevision(jobId, note, deliverable), "Revision note logged.");
 }

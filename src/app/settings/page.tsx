@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, CircleSlash, FlaskConical, RotateCcw, Store } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, CircleSlash, FlaskConical, PlugZap, RotateCcw, Store } from "lucide-react";
 import { resetDemoAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -52,9 +53,12 @@ export default function SettingsPage() {
           ) : null}
           <ul className="divide-y">
             <Conn name={`Brief analysis · ${config.astra.model}`} ok={astraLive()} detail={astraKey ? (config.mockMode ? "Key present · disabled by mock mode" : "Live") : "No ASTRA_API_KEY · offline analyzer in use"} />
-            <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No HIGGSFIELD_API_KEY_ID / SECRET · simulated provider in use"} />
+            <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No HF_API_KEY_ID / HF_API_KEY_SECRET · simulated provider in use"} />
             <Conn name={`Database · ${config.databasePath}`} ok detail="SQLite behind the repository layer" />
           </ul>
+          <Link href="/settings/connection-test" className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground hover:bg-accent/80">
+            <PlugZap className="size-3.5" /> Run a provider connection test
+          </Link>
         </Card>
         <Card title="Autonomy rules">
           <ul className="flex flex-col gap-3 text-[13.5px]">

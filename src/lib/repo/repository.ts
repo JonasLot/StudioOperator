@@ -6,6 +6,7 @@ import type {
   IntakeAnalysis,
   Job,
   Revision,
+  StoredAsset,
   Workflow,
   WorkflowStep,
 } from "@/lib/domain/types";
@@ -56,6 +57,9 @@ export interface StudioRepository {
 
   listActivity(jobId: string): ActivityEvent[];
   insertActivity(e: ActivityEvent): void;
+
+  insertAsset(a: StoredAsset): void;
+  getAsset(id: string): StoredAsset | null;
 
   countJobs(): number;
   wipe(): void;

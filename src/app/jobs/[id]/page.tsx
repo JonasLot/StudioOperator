@@ -90,7 +90,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
               { value: "brief", label: "Brief", icon: <FileText />, content: <BriefTab job={job} analysis={analysis} /> },
               { value: "decision", label: "Decision", icon: <Gavel />, content: <DecisionTab job={job} analysis={analysis} workflow={workflow} profitability={p} /> },
               { value: "workflow", label: "Workflow", icon: <ListOrdered />, count: workflow?.steps.length, content: <WorkflowTab job={job} workflow={workflow} generations={generations} /> },
-              { value: "costs", label: "Costs", icon: <Receipt />, content: <CostsTab workflow={workflow} generations={generations} revisions={revisions} profitability={p} /> },
+              { value: "costs", label: "Costs", icon: <Receipt />, content: <CostsTab jobId={job.id} workflow={workflow} generations={generations} revisions={revisions} profitability={p} /> },
               { value: "outputs", label: "Outputs", icon: <Images />, count: completed || undefined, content: <OutputsTab job={job} workflow={workflow} generations={generations} revisions={revisions} /> },
               { value: "revisions", label: "Revisions", icon: <MessageSquareDiff />, count: revisions.length || undefined, content: <RevisionsTab job={job} analysis={analysis} revisions={revisions} profitability={p} generations={generations} /> },
             ]}
