@@ -51,8 +51,10 @@ async function fastForward(jobId: string, until: (status: string) => boolean, ma
   for (let i = 0; i < maxRounds; i++) {
     const job = repo.getJob(jobId)!;
     if (until(job.status)) return;
+    // Back-date just past the mock render window so the mock completes this tick,
+    // but not so far that the application-level polling timeout would trip.
     for (const gen of repo.listGenerations(jobId).filter((x) => x.status === "queued" || x.status === "in_progress")) {
-      repo.updateGeneration(gen.id, { startedAt: new Date(Date.now() - 3_600_000).toISOString() });
+      repo.updateGeneration(gen.id, { startedAt: new Date(Date.now() - 10_000).toISOString() });
     }
     await tick(jobId);
   }
@@ -165,7 +167,13 @@ const g = globalThis as unknown as { __studioSeed?: Promise<void> };
 export function ensureSeeded() {
   if (!g.__studioSeed) {
     g.__studioSeed = (async () => {
-      if (getRepo().countJobs() === 0) await seedDemo();
+      try {
+        if (getRepo().countJobs() === 0) await seedDemo();
+      } catch (err) {
+        // Seeding is best-effort demo data — never let a partial seed take down
+        // the whole app (e.g. when a provider cannot complete generations).
+        console.error("Demo seeding did not finish:", (err as Error).message);
+      }
     })();
   }
   return g.__studioSeed;

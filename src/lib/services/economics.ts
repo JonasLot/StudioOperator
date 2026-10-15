@@ -22,7 +22,11 @@ export interface Profitability {
 const round = (n: number) => Math.round(n * 100) / 100;
 
 export function generationSpend(g: Generation) {
-  if (g.status === "blocked" || g.status === "canceled") return 0;
+  // Never charge generations that produced nothing usable: provider failures,
+  // moderation rejections, cancellations, budget blocks, or an app-level timeout.
+  if (g.status === "blocked" || g.status === "canceled" || g.status === "failed" || g.status === "nsfw") return 0;
+  if (g.timedOutAt) return 0;
+  // Reconcile to the provider's actual spend once known; fall back to the estimate.
   if (g.actualCost !== null) return g.actualCost;
   return g.costEstimate;
 }

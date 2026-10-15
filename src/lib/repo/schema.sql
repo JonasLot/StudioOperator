@@ -113,12 +113,28 @@ CREATE TABLE IF NOT EXISTS generations (
   output_type TEXT,
   selected INTEGER NOT NULL DEFAULT 0,
   error TEXT,
+  timed_out_at TEXT,
   created_at TEXT NOT NULL,
   started_at TEXT,
   completed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_generations_job ON generations(job_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_generations_status ON generations(status);
+
+-- Completed outputs copied into application-controlled storage, since provider
+-- URLs may expire. Bytes are stored base64 so it works on SQLite and libSQL alike.
+CREATE TABLE IF NOT EXISTS assets (
+  id TEXT PRIMARY KEY,
+  generation_id TEXT NOT NULL,
+  job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  data TEXT NOT NULL,
+  source_url TEXT,
+  bytes INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_assets_job ON assets(job_id, created_at);
 
 CREATE TABLE IF NOT EXISTS revisions (
   id TEXT PRIMARY KEY,

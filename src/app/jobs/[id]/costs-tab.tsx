@@ -4,10 +4,11 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import type { Generation, Revision, Workflow } from "@/lib/domain/types";
 import { getModel } from "@/lib/higgsfield/catalog";
 import { generationSpend, type Profitability } from "@/lib/services/economics";
-import { cn, dateTime, usd } from "@/lib/utils";
+import { cn, usd } from "@/lib/utils";
+import { GenerationControls } from "./gen-controls";
 import { Section } from "./section";
 
-export function CostsTab({ workflow, generations, revisions, profitability: p }: { workflow: Workflow | null; generations: Generation[]; revisions: Revision[]; profitability: Profitability }) {
+export function CostsTab({ jobId, workflow, generations, revisions, profitability: p }: { jobId: string; workflow: Workflow | null; generations: Generation[]; revisions: Revision[]; profitability: Profitability }) {
   if (!workflow) return <p className="rounded-xl border border-dashed bg-card px-4 py-6 text-[13px] text-muted-foreground">No cost estimate yet.</p>;
   const used = p.maxBudget ? (p.committedSpend / p.maxBudget) * 100 : 0;
   const rows = workflow.steps.map((s) => {
@@ -99,11 +100,11 @@ export function CostsTab({ workflow, generations, revisions, profitability: p }:
         </Table>
       </Section>
 
-      <Section title="Generation ledger" aside={<span className="tnum text-[11px] text-muted-foreground">{generations.length} requests</span>}>
+      <Section title="Generation ledger" aside={<span className="tnum text-[11px] text-muted-foreground">{generations.length} requests · failed/cancelled/timed-out are never charged</span>}>
         {generations.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">No provider requests yet. Nothing is spent until production starts.</p>
         ) : (
-          <div className="max-h-[420px] overflow-auto">
+          <div className="max-h-[460px] overflow-auto">
             <Table>
               <TableHeader className="sticky top-0 bg-card">
                 <TableRow>
@@ -112,20 +113,30 @@ export function CostsTab({ workflow, generations, revisions, profitability: p }:
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Estimate</TableHead>
                   <TableHead className="text-right">Actual</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Finished</TableHead>
+                  <TableHead className="text-right">Recorded</TableHead>
+                  <TableHead>Output</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {[...generations].reverse().map((g) => (
                   <TableRow key={g.id}>
                     <TableCell className="font-mono text-[11.5px] text-muted-foreground">{g.providerRequestId ?? "—"}</TableCell>
-                    <TableCell>{getModel(g.model).label}</TableCell>
-                    <TableCell><GenStatusBadge status={g.status} /></TableCell>
+                    <TableCell title={g.prompt}>
+                      <span className="font-medium">{getModel(g.model).label}</span>
+                      <span className="block text-[11px] text-muted-foreground">take {g.attempt} · {getModel(g.model).endpoint}</span>
+                    </TableCell>
+                    <TableCell>
+                      <GenStatusBadge status={g.status} />
+                      {g.timedOutAt ? <span className="ml-1 rounded bg-warn-soft px-1 py-0.5 text-[10px] text-warn">timed out</span> : null}
+                    </TableCell>
                     <TableCell className="tnum text-right">{usd(g.costEstimate, { cents: true })}</TableCell>
                     <TableCell className="tnum text-right">{g.actualCost !== null ? usd(g.actualCost, { cents: true }) : <span className="text-muted-foreground">pending</span>}</TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{dateTime(g.startedAt)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{dateTime(g.completedAt)}</TableCell>
+                    <TableCell className="tnum text-right font-medium">{usd(generationSpend(g), { cents: true })}</TableCell>
+                    <TableCell>
+                      {g.outputUrl ? <a href={g.outputUrl} target="_blank" rel="noreferrer" className="text-[12.5px] underline underline-offset-2 hover:text-foreground">view</a> : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right"><GenerationControls jobId={jobId} generationId={g.id} status={g.status} timedOut={!!g.timedOutAt} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>

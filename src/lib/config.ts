@@ -55,10 +55,24 @@ export const config = {
     model: process.env.ASTRA_MODEL || "gpt-6-astra",
   },
 
+  // Higgsfield generation provider. Credentials are read here, server-side only,
+  // and must never be logged, serialised to the client, or put in error messages
+  // (see scrubSecrets). HF_API_KEY_ID / HF_API_KEY_SECRET are the primary names;
+  // HIGGSFIELD_* are accepted as fallbacks.
   higgsfield: {
-    apiKeyId: process.env.HIGGSFIELD_API_KEY_ID || "",
-    apiKeySecret: process.env.HIGGSFIELD_API_KEY_SECRET || "",
+    apiKeyId: process.env.HF_API_KEY_ID || process.env.HIGGSFIELD_API_KEY_ID || "",
+    apiKeySecret: process.env.HF_API_KEY_SECRET || process.env.HIGGSFIELD_API_KEY_SECRET || "",
     baseUrl: (process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai").replace(/\/$/, ""),
+    // The live Higgsfield wire mapping is UNVERIFIED against the official docs.
+    // It refuses to make network calls unless this is explicitly set to "true",
+    // so we never hit guessed endpoints or spend money on assumptions.
+    wireEnabled: process.env.HIGGSFIELD_WIRE_ENABLED === "true",
+  },
+
+  // Production polling. The app-level timeout is tracked separately from the
+  // provider's own status and is never reported as a provider status.
+  generation: {
+    timeoutMs: num(process.env.GENERATION_TIMEOUT_MS, 1000 * 60 * 10), // 10 min per attempt
   },
 
   economics: {
@@ -98,6 +112,17 @@ export function astraLive() {
 
 export function higgsfieldLive() {
   return !config.mockMode && config.higgsfield.apiKeyId.length > 0 && config.higgsfield.apiKeySecret.length > 0;
+}
+
+// Remove any occurrence of the Higgsfield credentials from a string before it is
+// logged, persisted, shown to the user, or put in an error message. Defensive:
+// credentials must never appear anywhere outside the server-side fetch itself.
+export function scrubSecrets(input: string): string {
+  let out = input;
+  for (const secret of [config.higgsfield.apiKeySecret, config.higgsfield.apiKeyId, config.openai.apiKey, config.astra.apiKey, config.turso.authToken]) {
+    if (secret && secret.length >= 6) out = out.split(secret).join("«redacted»");
+  }
+  return out;
 }
 
 export function publicConfig() {

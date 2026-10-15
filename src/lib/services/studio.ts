@@ -1,6 +1,7 @@
 import "server-only";
 import { analyzeBrief } from "@/lib/ai/brief-analyzer";
-import { config } from "@/lib/config";
+import { config, scrubSecrets } from "@/lib/config";
+import { persistAsset } from "@/lib/higgsfield/asset-store";
 import type {
   ApprovalKind,
   ApprovalRequest,
@@ -344,6 +345,7 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
   const gens = repo.listGenerations(job.id);
   if (!fitsBudget(wf, gens, estimate)) return "over_budget";
   const provider = getProvider();
+  const model = getModel(step.modelId);
   const gen: Generation = {
     id: newId("gen"),
     jobId: job.id,
@@ -363,16 +365,30 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
     outputType: null,
     selected: false,
     error: null,
+    timedOutAt: null,
     createdAt: now(),
     startedAt: now(),
     completedAt: null,
   };
   repo.insertGeneration(gen);
+  // Use the provider's cost estimate before paying, when it exposes one.
+  if (provider.capabilities.estimate && provider.estimate) {
+    try {
+      const est = await provider.estimate({ generationId: gen.id, modelId: step.modelId, prompt, costEstimate: estimate });
+      if (est.estimatedCost !== null && Math.abs(est.estimatedCost - estimate) >= 0.01) {
+        log(job.id, "agent", `${model.label}: provider estimate $${est.estimatedCost.toFixed(2)} vs catalog $${estimate.toFixed(2)} (budget uses the catalog figure).`);
+      }
+    } catch (err) {
+      log(job.id, "system", `Cost estimate unavailable: ${scrubSecrets((err as Error).message)}`);
+    }
+  }
   try {
     const r = await provider.submit({ generationId: gen.id, modelId: step.modelId, prompt, costEstimate: estimate });
     repo.updateGeneration(gen.id, { providerRequestId: r.providerRequestId, statusUrl: r.statusUrl, status: r.status });
+    log(job.id, "agent", `Submitted take ${attempt} of “${step.name}” on ${model.label} (${model.endpoint}); est. $${estimate.toFixed(2)}, request ${r.providerRequestId}.`);
   } catch (err) {
-    repo.updateGeneration(gen.id, { status: "failed", error: (err as Error).message, completedAt: now(), actualCost: 0 });
+    // Failed submit is never charged (status "failed", actualCost 0). Scrub secrets.
+    repo.updateGeneration(gen.id, { status: "failed", error: scrubSecrets((err as Error).message), completedAt: now(), actualCost: 0 });
   }
   return "submitted";
 }
@@ -402,29 +418,49 @@ export async function tick(jobId: string) {
   const provider = getProvider();
   const analysis = repo.getLatestAnalysis(jobId);
 
-  // 1. poll
-  for (const g of repo.listGenerations(jobId).filter((x) => x.status === "queued" || x.status === "in_progress")) {
+  // 1. poll in-flight work (and enforce the app-level timeout, which is tracked
+  //    separately from the provider's status — never reported as a provider status).
+  for (const g of repo.listGenerations(jobId).filter((x) => (x.status === "queued" || x.status === "in_progress") && !x.timedOutAt)) {
+    const elapsed = Date.now() - new Date(g.startedAt ?? g.createdAt).getTime();
+    if (elapsed > config.generation.timeoutMs) {
+      repo.updateGeneration(g.id, { timedOutAt: now() });
+      log(jobId, "system", `Take ${g.attempt} on ${getModel(g.model).label} exceeded the ${Math.round(config.generation.timeoutMs / 60000)}-min polling limit; marked timed out (provider status left as ${g.status}). Not charged.`);
+      continue;
+    }
     try {
       const r = await provider.poll(g);
-      if (r.status !== g.status || r.outputUrl) {
-        const terminal = !["queued", "in_progress"].includes(r.status);
+      const terminal = !["queued", "in_progress"].includes(r.status);
+      let outputUrl = g.outputUrl;
+      let outputType = g.outputType;
+      if (r.status === "completed" && r.asset) {
+        const persisted = await persistAsset(jobId, g.id, r.asset);
+        outputUrl = persisted.storedUrl;
+        outputType = r.asset.kind;
+        if (persisted.note) log(jobId, "system", `Could not copy output to app storage (${persisted.note}); using the provider URL, which may expire.`);
+      }
+      if (r.status !== g.status || outputUrl !== g.outputUrl) {
         repo.updateGeneration(g.id, {
           status: r.status,
-          outputUrl: r.outputUrl ?? g.outputUrl,
-          outputType: r.outputType ?? g.outputType,
+          outputUrl,
+          outputType,
           actualCost: r.actualCost !== undefined ? r.actualCost : g.actualCost,
-          error: r.error ?? null,
+          error: r.error ? scrubSecrets(r.error) : null,
           completedAt: terminal ? now() : null,
         });
+        if (terminal) {
+          const cost = r.status === "completed" ? (r.actualCost ?? g.costEstimate) : 0;
+          log(jobId, "agent", `Take ${g.attempt} ${r.status}${r.status === "completed" ? ` · recorded $${cost.toFixed(2)}` : ""}.`);
+        }
       }
     } catch (err) {
-      repo.updateGeneration(g.id, { error: `Poll error: ${(err as Error).message}` });
+      repo.updateGeneration(g.id, { error: `Poll error: ${scrubSecrets((err as Error).message)}` });
     }
   }
 
   // 2. settle steps + revisions
   let gens = repo.listGenerations(jobId);
-  const inFlight = (xs: Generation[]) => xs.some((g) => g.status === "queued" || g.status === "in_progress");
+  // Timed-out generations are no longer "in flight" for settling purposes.
+  const inFlight = (xs: Generation[]) => xs.some((g) => (g.status === "queued" || g.status === "in_progress") && !g.timedOutAt);
   for (const step of wf.steps.filter((s) => s.status === "running")) {
     const sg = gens.filter((g) => g.stepId === step.id && !g.revisionId);
     if (inFlight(sg)) continue;
@@ -546,6 +582,49 @@ export function toggleSelect(generationId: string) {
   repo.updateGeneration(g.id, { selected: !g.selected });
 }
 
+/**
+ * Ask the provider to cancel a generation. Only allowed while the request is
+ * still queued, and only when the current provider exposes a cancel action.
+ */
+export async function cancelGeneration(jobId: string, generationId: string) {
+  const repo = getRepo();
+  const g = repo.getGeneration(generationId);
+  if (!g || g.jobId !== jobId) throw new GuardrailError("Generation not found.");
+  if (g.status !== "queued") throw new GuardrailError("Only queued generations can be cancelled.");
+  const provider = getProvider();
+  if (!provider.capabilities.cancel || !provider.cancel) throw new GuardrailError("This provider does not expose a cancel action.");
+  try {
+    const r = await provider.cancel(g);
+    repo.updateGeneration(g.id, { status: r.status ?? "canceled", actualCost: 0, completedAt: now(), error: null });
+    log(jobId, "operator", `Cancelled take ${g.attempt} on ${getModel(g.model).label}. Not charged.`);
+  } catch (err) {
+    throw new GuardrailError(scrubSecrets((err as Error).message));
+  }
+}
+
+/**
+ * Retry a failed / timed-out / cancelled generation. This always creates a NEW
+ * generation record for the same step; the failed attempt is never overwritten.
+ */
+export async function retryGeneration(jobId: string, generationId: string) {
+  const repo = getRepo();
+  const job = repo.getJob(jobId);
+  const wf = repo.getCurrentWorkflow(jobId);
+  const g = repo.getGeneration(generationId);
+  if (!job || !g || g.jobId !== jobId) throw new GuardrailError("Generation not found.");
+  assertWorkflowApproved(job, wf);
+  const retryable = g.status === "failed" || g.status === "nsfw" || g.status === "canceled" || !!g.timedOutAt;
+  if (!retryable) throw new GuardrailError("Only failed, timed-out or cancelled generations can be retried.");
+  const step = wf.steps.find((s) => s.id === g.stepId);
+  if (!step) throw new GuardrailError("Original step no longer exists.");
+  const attempt = repo.listGenerations(jobId).filter((x) => x.stepId === step.id).length + 1;
+  if (job.status !== "generating") repo.updateJob(jobId, { status: "generating" });
+  if (step.status === "failed" || step.status === "blocked") repo.updateStep(step.id, { status: "running" });
+  const r = await submitGeneration(job, wf, step, attempt, promptFor(step, repo.getLatestAnalysis(jobId), attempt, "Operator-requested retry of a prior attempt."), g.revisionId, step.unitCost);
+  if (r === "over_budget") blockForBudget(job, wf, step, step.unitCost);
+  log(jobId, "operator", `Retried take ${g.attempt} as a new attempt on “${step.name}”.`);
+}
+
 // ---------------------------------------------------------------------------
 // Revisions
 // ---------------------------------------------------------------------------
@@ -656,4 +735,24 @@ export function approveFinalDelivery(jobId: string, attestation: string) {
 
 export function profitabilityFor(bundle: JobBundle) {
   return computeProfitability(bundle.job, bundle.workflow, bundle.generations, bundle.revisions);
+}
+
+// ---------------------------------------------------------------------------
+// Provider connection test (Connection Test screen). Returns only non-secret
+// data; any detail string is scrubbed of credentials.
+// ---------------------------------------------------------------------------
+
+export function providerInfo() {
+  const p = getProvider();
+  return { name: p.name, live: p.live, capabilities: p.capabilities, baseUrl: config.higgsfield.baseUrl, wireEnabled: config.higgsfield.wireEnabled };
+}
+
+export async function providerConnectionTest(): Promise<{ ok: boolean; detail: string; name: string; live: boolean }> {
+  const p = getProvider();
+  try {
+    const r = await p.connectionTest();
+    return { ok: r.ok, detail: scrubSecrets(r.detail), name: p.name, live: p.live };
+  } catch (err) {
+    return { ok: false, detail: scrubSecrets((err as Error).message), name: p.name, live: p.live };
+  }
 }
