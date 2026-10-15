@@ -9,6 +9,14 @@ function num(v: string | undefined, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Pasted env values often arrive wrapped in quotes or with a stray newline/space
+// (a common mistake in dashboards like Vercel). A URL or token never legitimately
+// contains quotes or whitespace, so strip both — libSQL otherwise rejects them as
+// an invalid URI character.
+function cleanEnv(v: string | undefined) {
+  return (v || "").trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
+}
+
 // On read-only serverless hosts (e.g. Vercel) only /tmp is writable, so the
 // SQLite file must live there. Local/long-lived servers keep it in ./data.
 function defaultDatabasePath() {
@@ -25,10 +33,8 @@ export const config = {
   // shared across instances) instead of the local SQLite file — needed for jobs to
   // persist on serverless hosts like Vercel. See README "Persisting jobs in production".
   turso: {
-    // Trimmed: pasted env values often carry a stray newline/space, which libSQL
-    // rejects as an invalid URI character.
-    url: (process.env.TURSO_DATABASE_URL || "").trim(),
-    authToken: (process.env.TURSO_AUTH_TOKEN || "").trim(),
+    url: cleanEnv(process.env.TURSO_DATABASE_URL),
+    authToken: cleanEnv(process.env.TURSO_AUTH_TOKEN),
   },
 
   astra: {
