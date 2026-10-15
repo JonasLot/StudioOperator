@@ -75,6 +75,15 @@ export const config = {
     timeoutMs: num(process.env.GENERATION_TIMEOUT_MS, 1000 * 60 * 10), // 10 min per attempt
   },
 
+  // Automated-QA repair limits. A QA-driven repair runs automatically only within
+  // all of these; anything larger requires explicit human approval.
+  qa: {
+    perRepairMaxUsd: num(process.env.QA_PER_REPAIR_MAX_USD, 8),
+    perJobRepairMaxUsd: num(process.env.QA_PER_JOB_REPAIR_MAX_USD, 25),
+    maxAutoRepairsPerJob: num(process.env.QA_MAX_AUTO_REPAIRS, 2),
+    repairAttempts: num(process.env.QA_REPAIR_ATTEMPTS, 2),
+  },
+
   economics: {
     defaultContingencyPct: num(process.env.DEFAULT_CONTINGENCY_PCT, 0.2),
     minGrossMarginPct: num(process.env.MIN_GROSS_MARGIN_PCT, 0.45),

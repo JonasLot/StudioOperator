@@ -139,3 +139,9 @@ export async function resetDemoAction() {
   revalidatePath("/", "layout");
   redirect("/");
 }
+
+export async function resetDemoToPresentAction() {
+  await resetDemo();
+  revalidatePath("/", "layout");
+  redirect("/present");
+}

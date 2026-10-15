@@ -171,7 +171,7 @@ function mockAnalyze(input: BriefInput): AnalysisDraft {
   const deliverables: Deliverable[] = [];
   let n = 1;
   const nextId = () => `D${n++}`;
-  const wantsVideo = /\b(film|video|spot|commercial|reel|ad|trailer|teaser|cutdown|clip|animation|motion)\b/i.test(text);
+  const wantsVideo = /\b(film|video|spot|commercial|reel|ad|trailer|teaser|cutdown|clip|animation|motion|sequence|orbit\w*|footage|cinematic)\b/i.test(text);
   const cutdownAspect = aspects.find((a) => a === "9:16" || a === "4:5" || a === "1:1") ?? null;
   const heroAspect = aspects.find((a) => a !== cutdownAspect) ?? aspects[0] ?? null;
   const res = resolutions[0] ?? null;
@@ -206,11 +206,12 @@ function mockAnalyze(input: BriefInput): AnalysisDraft {
     deliverables.push({ id: nextId(), kind: "social", title: "Short video (duration TBC)", quantity: 1, durationSec: 15, aspectRatio: heroAspect, resolution: res });
   }
 
-  const stillMatch = text.match(/(\d{1,2}|one|two|three|four|five|six|eight|ten|twelve)\s+(?:[\w-]+\s+){0,2}(stills|key ?visuals|images|posters|thumbnails|banners|frames)\b/i);
+  const stillMatch = text.match(/\b(\d{1,2}|a|single|one|two|three|four|five|six|eight|ten|twelve)\s+(?:[\w-]+\s+){0,2}(stills?|key ?visuals?|key ?frames?|images?|posters?|thumbnails?|banners?|frames?)\b/i);
   if (stillMatch) {
-    const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, eight: 8, ten: 10, twelve: 12 };
+    const words: Record<string, number> = { a: 1, single: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, eight: 8, ten: 10, twelve: 12 };
     const qty = Number(stillMatch[1]) || words[stillMatch[1].toLowerCase()] || 1;
-    const noun = stillMatch[2].toLowerCase().replace(/^key ?visuals$/, "key visuals");
+    const raw = stillMatch[2].toLowerCase().replace(/\s+/g, " ").replace(/^key ?(visuals?|frames?)$/, "key $1");
+    const noun = raw.endsWith("s") ? raw : `${raw}s`; // normalize to a plural label
     deliverables.push({ id: nextId(), kind: "still", title: noun.charAt(0).toUpperCase() + noun.slice(1), quantity: qty, durationSec: null, aspectRatio: aspects.find((a) => a === "4:5" || a === "1:1") ?? heroAspect, resolution: res });
   }
   const wantsVO = /\b(voice[- ]?over|voiceover|\bvo\b|narrat\w+)\b/i.test(text);

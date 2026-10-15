@@ -43,6 +43,30 @@ Usage: paid social and web, Nordics + UK, 12 months. Two revision rounds include
   podcast: `Podcast "Signal & Noise", season 3 launch. Three cover art stills (1:1) plus a 20s vertical teaser at 9:16 with a voiceover reading the episode title: "Episode 1: The Quiet Machines". Brand palette is black and electric lime, logo bottom-left. Usage: podcast platforms and social, worldwide. Two revisions included. Moodboard: https://example.com/signal-noise/s3`,
 
   library: `Hi! Referral from Maria at Vestland Arkitekter. We're an architecture firm in Bergen and want a short film showing our new public library at different times of day, for a competition submission. We have renders and photos. Budget is flexible-ish. Can you help?`,
+
+  glassMonument: `After the Rain: Glass Monument — cinematic brand film.
+
+We need one short cinematic film delivered in both 9:16 and 16:9 (4K masters), plus three approved keyframes.
+
+Weather arc / story: a translucent glass monument stands on an open plaza as a storm passes — heavy rain first, then the clouds break and a low sun ignites the wet glass and the reflections in the standing water. No people.
+
+Scenes to show: the monument in the rain; the transition as the storm clears; reflections and the water settling after the rain.
+
+We are providing: an approved monument silhouette and reference, glass-material references, site direction, weather-arc notes, visual references, and examples we like and dislike.
+
+Constraints: the monument's architecture, material, scale and site must stay consistent across every shot. Water, reflections and the after-storm transition must remain believable. Do not change the monument design. Do not show people. Do not show competitor buildings.
+
+Deadline: 72 hours. Two revision rounds included. Music is licensed by us.`,
+
+  nightOrchard: `Night Orchard: Slow Orbit.
+
+Deliver one atmospheric short sequence built around a single smooth orbiting camera move through a night orchard, plus one hero still. 16:9, 1080p.
+
+We are providing: an approved orchard-world keyframe, a low-light palette, camera direction (a slow 180° orbit), a pacing reference, and the delivery format.
+
+Constraints: preserve the orchard world, its depth, low-light detail and spatial continuity throughout the orbit. No text on screen. No people.
+
+Deadline: 5 days. One revision round included.`,
 };
 
 /** Drive the mock provider to completion instantly by back-dating in-flight work. */
@@ -137,6 +161,42 @@ export async function seedDemo() {
   await startProduction(podcast);
   await fastForward(podcast, (s) => s === "qa");
   approveFinalDelivery(podcast, "Delivered manually on Contra.");
+
+  // --- Demo 1: After the Rain: Glass Monument (the main showcase) ---
+  const glass = await createJob({
+    title: "After the Rain: Glass Monument",
+    source: "upwork",
+    clientName: "Glasverk Studio",
+    rawBrief: SEED_BRIEFS.glassMonument,
+    budget: 3800,
+    deadline: day(3),
+    clientNotes: "Fixed package price. Client supplies the monument reference and licensed music.",
+    referenceAssets: [
+      "monument-silhouette-approved.png",
+      "glass-material-refs.zip",
+      "site-direction.pdf",
+      "weather-arc-notes.md",
+      "likes-and-dislikes.pdf",
+    ],
+  });
+  approveInitialWorkflow(glass, repo.getCurrentWorkflow(glass)!.maxBudget);
+  await startProduction(glass);
+  await fastForward(glass, (s) => s === "qa");
+
+  // --- Demo 2: Night Orchard: Slow Orbit (different creative problem → different route) ---
+  const orchard = await createJob({
+    title: "Night Orchard: Slow Orbit",
+    source: "direct",
+    clientName: "Lumen Films",
+    rawBrief: SEED_BRIEFS.nightOrchard,
+    budget: 1200,
+    deadline: day(5),
+    clientNotes: "Atmospheric spec piece. Client supplies the approved orchard keyframe.",
+    referenceAssets: ["orchard-world-keyframe.png", "low-light-palette.png", "orbit-camera-direction.pdf", "pacing-reference.mp4"],
+  });
+  approveInitialWorkflow(orchard, repo.getCurrentWorkflow(orchard)!.maxBudget);
+  await startProduction(orchard);
+  await fastForward(orchard, (s) => s === "qa");
 
   // 6. Fresh lead, not yet analysed.
   const libraryId = `job_seedlibrary${Date.now().toString(36).slice(-4)}`;
