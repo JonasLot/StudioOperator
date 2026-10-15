@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   description: "Your creative operating system",
 };
 
+// Every screen reads the live database and the layout seeds it on first use, so
+// nothing is statically prerendered — this also keeps `next build` from opening a
+// database connection (e.g. the not-found page) before env vars point anywhere real.
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   await ensureSeeded();
   const cfg = publicConfig();
