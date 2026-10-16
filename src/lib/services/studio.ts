@@ -427,7 +427,9 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
     await audit({ jobId: job.id, kind: "generation", summary: `Submitted take ${attempt} of “${step.name}” on ${model.label}.`, costDeltaUsd: estimate });
   } catch (err) {
     // Failed submit is never charged (status "failed", actualCost 0). Scrub secrets.
-    await repo.updateGeneration(gen.id, { status: "failed", error: scrubSecrets((err as Error).message), completedAt: now(), actualCost: 0 });
+    const reason = scrubSecrets((err as Error).message);
+    await repo.updateGeneration(gen.id, { status: "failed", error: reason, completedAt: now(), actualCost: 0 });
+    await log(job.id, "system", `Take ${attempt} of “${step.name}” could not be submitted: ${reason}`);
   }
   return "submitted";
 }
@@ -515,7 +517,8 @@ export async function tick(jobId: string) {
       else await log(jobId, "agent", `All attempts failed on “${step.name}”; retrying within budget.`);
     } else {
       await repo.updateStep(step.id, { status: "failed" });
-      await log(jobId, "agent", `“${step.name}” failed after retries. Needs operator attention.`);
+      const lastError = [...sg].reverse().find((g) => g.error)?.error;
+      await log(jobId, "agent", `“${step.name}” failed after retries. Needs operator attention.${lastError ? ` Last error: ${lastError}` : ""}`);
     }
   }
   for (const rev of (await repo.listRevisions(jobId)).filter((r) => r.runStatus === "running")) {

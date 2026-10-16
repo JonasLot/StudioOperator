@@ -53,7 +53,6 @@ async function analyzeWithAstra(input: AnalyzerInput): Promise<Analysis> {
     headers: { Authorization: `Bearer ${config.openai.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: config.openai.model,
-      temperature: 0.1,
       max_output_tokens: 3000,
       input: [
         { role: "system", content: SYSTEM_PROMPT },
