@@ -355,6 +355,23 @@ export class SqliteStudioRepository implements StudioRepository {
     this.patch("escalations", id, patch, SPEC.escalation);
   }
 
+  // --- API keys entered in the UI ---
+  listSecrets() {
+    return (this.db.prepare("SELECT name, value, updated_at FROM app_secrets").all() as { name: string; value: string; updated_at: string }[]).map((r) => ({
+      name: r.name,
+      value: r.value,
+      updatedAt: r.updated_at,
+    }));
+  }
+  upsertSecret(name: string, value: string) {
+    this.db
+      .prepare("INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+      .run(name, value, new Date().toISOString());
+  }
+  deleteSecret(name: string) {
+    this.db.prepare("DELETE FROM app_secrets WHERE name = ?").run(name);
+  }
+
   wipe() {
     this.db.exec(
       "DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",

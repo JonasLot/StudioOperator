@@ -10,6 +10,7 @@ import * as agency from "@/lib/services/agency";
 import { GuardrailError } from "@/lib/services/guardrails";
 import * as intake from "@/lib/services/intake";
 import * as studio from "@/lib/services/studio";
+import { SECRET_DEFS, SECRET_NAMES, adminPasscode, saveSecrets, verifyAdminPasscode, type SecretName } from "@/lib/secrets";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -193,4 +194,42 @@ export async function saveAutonomyAction(_prev: AutonomyState, form: FormData): 
   revalidatePath("/autonomy");
   revalidatePath("/present");
   return { ok: true };
+}
+
+export type ApiKeysState = { ok?: true; message?: string; error?: string } | undefined;
+
+/**
+ * Save or remove API keys from the Settings page. Every request must carry the admin
+ * passcode (no session to hijack, nothing to forge cross-site). Values are never echoed
+ * back or logged; the result only names which keys changed.
+ */
+export async function saveApiKeysAction(_prev: ApiKeysState, form: FormData): Promise<ApiKeysState> {
+  if (!adminPasscode()) {
+    return { error: "Saving keys here is switched off: set ADMIN_PASSCODE (12+ characters) in the server environment and redeploy." };
+  }
+  if (!verifyAdminPasscode(String(form.get("passcode") ?? ""))) {
+    await new Promise((resolve) => setTimeout(resolve, 800)); // slow down guessing
+    return { error: "Wrong admin passcode." };
+  }
+  const updates: Partial<Record<SecretName, string>> = {};
+  const remove: SecretName[] = [];
+  for (const name of SECRET_NAMES) {
+    const value = String(form.get(name) ?? "");
+    if (value.trim()) updates[name] = value;
+    if (form.get(`remove_${name}`) === "on" && !value.trim()) remove.push(name);
+  }
+  if (!Object.keys(updates).length && !remove.length) return { error: "Nothing to save — paste a key, or tick one to remove." };
+  try {
+    const r = saveSecrets(updates, remove);
+    if (!r.ok) return { error: r.error };
+    revalidatePath("/", "layout");
+    const parts = [
+      r.saved.length ? `Saved ${r.saved.map((n) => SECRET_DEFS[n].label).join(", ")}.` : "",
+      r.removed.length ? `Removed ${r.removed.map((n) => SECRET_DEFS[n].label).join(", ")} (falls back to the environment variable).` : "",
+    ].filter(Boolean);
+    return { ok: true, message: parts.join(" ") };
+  } catch (err) {
+    console.error("Saving API keys failed:", (err as Error).name);
+    return { error: "Could not save the keys. Check that the database is reachable." };
+  }
 }

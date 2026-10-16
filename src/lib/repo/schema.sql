@@ -235,3 +235,11 @@ CREATE TABLE IF NOT EXISTS escalations (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_escalations_job ON escalations(job_id, created_at);
+
+-- API keys entered on the Settings page, encrypted at rest (see src/lib/secrets).
+-- Not wiped by "reset demo data".
+CREATE TABLE IF NOT EXISTS app_secrets (
+  name TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

@@ -3,9 +3,11 @@ import Link from "next/link";
 import { CheckCircle2, CircleSlash, FlaskConical, PlugZap, RotateCcw, Store } from "lucide-react";
 import { resetDemoAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
+import { ApiKeysForm } from "./api-keys-form";
 import { Button } from "@/components/ui/button";
 import { astraLive, config, higgsfieldLive } from "@/lib/config";
 import { SOURCE_LABEL, type JobSource } from "@/lib/domain/types";
+import { adminPasscode, secretStatus, storageIsDurable } from "@/lib/secrets";
 import { MANUAL_MARKETPLACE_STEPS } from "@/lib/services/marketplace-policy";
 import { pct } from "@/lib/utils";
 
@@ -42,7 +44,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Workspace / Autonomy & connections"
         title="How far the agent may go."
-        subtitle="Read from server-side environment variables. Change them in .env.local and restart; keys are never sent to the browser."
+        subtitle="Economics are read from server-side environment variables. API keys can be saved below or set as environment variables; key values are never sent to the browser."
       />
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="Connections">
@@ -52,13 +54,16 @@ export default function SettingsPage() {
             </p>
           ) : null}
           <ul className="divide-y">
-            <Conn name={`Brief analysis · ${config.openai.model}`} ok={astraLive()} detail={astraKey ? (astraLive() ? "Live" : "Key present · disabled by mock mode") : "No OPENAI_API_KEY · offline analyzer in use"} />
-            <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No HF_API_KEY_ID / HF_API_KEY_SECRET · simulated provider in use"} />
+            <Conn name={`Brief analysis · ${config.openai.model}`} ok={astraLive()} detail={astraKey ? (astraLive() ? "Live" : "Key present · disabled by mock mode") : "No OpenAI API key · offline analyzer in use"} />
+            <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No Higgsfield key · simulated provider in use"} />
             <Conn name={`Database · ${config.databasePath}`} ok detail="SQLite behind the repository layer" />
           </ul>
           <Link href="/settings/connection-test" className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground hover:bg-accent/80">
             <PlugZap className="size-3.5" /> Run a provider connection test
           </Link>
+        </Card>
+        <Card title="API keys">
+          <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} durable={storageIsDurable()} />
         </Card>
         <Card title="Autonomy rules">
           <ul className="flex flex-col gap-3 text-[13.5px]">

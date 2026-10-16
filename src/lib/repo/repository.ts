@@ -83,6 +83,11 @@ export interface StudioRepository {
   insertEscalation(e: Escalation): void;
   updateEscalation(id: string, patch: Partial<Omit<Escalation, "id" | "jobId">>): void;
 
+  // --- API keys entered in the UI (values are ciphertext) ---
+  listSecrets(): { name: string; value: string; updatedAt: string }[];
+  upsertSecret(name: string, value: string): void;
+  deleteSecret(name: string): void;
+
   countJobs(): number;
   wipe(): void;
 }
