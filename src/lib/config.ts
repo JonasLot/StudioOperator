@@ -106,6 +106,28 @@ export const config = {
     } satisfies Record<JobSource, number>,
   },
 
+  // Defaults used to seed the single account-level Autonomy Settings row. Once a
+  // human edits the settings in the Autonomy screen, the stored row wins — these
+  // only apply on first seed / demo reset.
+  autonomy: {
+    maxAutoSpendPerJobUsd: num(process.env.AUTONOMY_MAX_JOB_SPEND_USD, 60),
+    maxAutoSpendPerRepairUsd: num(process.env.AUTONOMY_MAX_REPAIR_SPEND_USD, 8),
+    maxAttemptsPerStep: num(process.env.AUTONOMY_MAX_ATTEMPTS_PER_STEP, 16),
+    // Catalog model families the agent may choose on its own.
+    allowedModelFamilies: (process.env.AUTONOMY_ALLOWED_FAMILIES || "soul,cinema,kling,seedance,ideogram,edit,upscale,voice")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    // Message types that may be SENT automatically (on an allowed channel). Everything
+    // else is drafted for human approval. Marketplace channels are never auto-sent.
+    autoSendMessageTypes: (process.env.AUTONOMY_AUTOSEND || "progress_update")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    autoShareConcepts: process.env.AUTONOMY_AUTO_SHARE_CONCEPTS === "true",
+    finalDeliveryAlwaysApproval: process.env.AUTONOMY_DELIVERY_ALWAYS_APPROVAL !== "false",
+  },
+
   operatorName: process.env.OPERATOR_NAME || "Operator",
 };
 

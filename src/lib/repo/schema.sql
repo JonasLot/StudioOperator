@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   source_fee_pct REAL NOT NULL DEFAULT 0,
   contingency_pct REAL NOT NULL DEFAULT 0.2,
   rights_cleared INTEGER NOT NULL DEFAULT 0,
+  template_id TEXT,
   delivered_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -177,3 +178,81 @@ CREATE TABLE IF NOT EXISTS activity (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_activity_job ON activity(job_id, created_at);
+
+-- ---------------------------------------------------------------------------
+-- Supervised autonomy: Client Agent messages, autonomy settings, client memory,
+-- the autonomy audit log and escalations.
+-- ---------------------------------------------------------------------------
+
+-- Single account-level row (id = 'default').
+CREATE TABLE IF NOT EXISTS autonomy_settings (
+  id TEXT PRIMARY KEY,
+  max_auto_spend_per_job_usd REAL NOT NULL,
+  max_auto_spend_per_repair_usd REAL NOT NULL,
+  max_attempts_per_step INTEGER NOT NULL,
+  allowed_model_families TEXT NOT NULL,
+  auto_send_message_types TEXT NOT NULL,
+  auto_share_concepts INTEGER NOT NULL DEFAULT 0,
+  final_delivery_always_approval INTEGER NOT NULL DEFAULT 1,
+  always_pause TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Account-level memory about a client, keyed by a normalized client name.
+CREATE TABLE IF NOT EXISTS client_memory (
+  id TEXT PRIMARY KEY,
+  client_key TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  logos TEXT NOT NULL DEFAULT '[]',
+  colors TEXT NOT NULL DEFAULT '[]',
+  fonts TEXT NOT NULL DEFAULT '[]',
+  tone TEXT,
+  product_details TEXT NOT NULL DEFAULT '[]',
+  winning_assets TEXT NOT NULL DEFAULT '[]',
+  rejected_styles TEXT NOT NULL DEFAULT '[]',
+  delivery_preferences TEXT,
+  communication_preferences TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_memory_key ON client_memory(client_key);
+
+CREATE TABLE IF NOT EXISTS agent_messages (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL,
+  auto_allowed INTEGER NOT NULL DEFAULT 0,
+  held_reason TEXT,
+  created_at TEXT NOT NULL,
+  sent_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_messages_job ON agent_messages(job_id, created_at);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  job_id TEXT,
+  kind TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  detail TEXT,
+  cost_delta_usd REAL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_job ON audit_log(job_id, created_at);
+
+CREATE TABLE IF NOT EXISTS escalations (
+  id TEXT PRIMARY KEY,
+  job_id TEXT,
+  reason TEXT NOT NULL,
+  title TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  recommended_action TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  resolved_by TEXT,
+  resolved_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_escalations_job ON escalations(job_id, created_at);
