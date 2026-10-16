@@ -47,6 +47,17 @@ Alternatively, deploy to a host with a persistent disk (Render, Railway, Fly.io)
 `DATABASE_PATH` at the mounted volume; the local SQLite driver then persists jobs as-is. For a full
 SQL database, implement the `StudioRepository` interface against Postgres (see **Architecture**).
 
+## API keys on the Settings page
+
+`/settings` has an **API keys** card for the OpenAI key and the Higgsfield key ID / secret, so you
+can fill in or swap keys without redeploying. It is off until the server has an `ADMIN_PASSCODE`
+(12+ characters). Every change must include that passcode, keys are stored AES-256-GCM encrypted
+in the database (key derived from the passcode), and values are write-only: the page only shows
+where a key comes from and its last four characters. A key saved here overrides the environment
+variable; ticking *Remove* falls back to it. Use Turso for persistence on Vercel, otherwise saved
+keys live in temporary storage. Mock mode (`STUDIO_MOCK_MODE`) and `HIGGSFIELD_WIRE_ENABLED` are
+still environment settings: keys alone do not switch generation to live.
+
 ## Brief analysis (GPT-6 Astra)
 
 Pasting a brief runs a structured intake analysis. With `OPENAI_API_KEY` set it calls the

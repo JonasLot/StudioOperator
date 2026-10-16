@@ -1,5 +1,6 @@
 import "server-only";
 import type { JobSource } from "@/lib/domain/types";
+import { secretValue } from "@/lib/secrets";
 
 // Server-only configuration. Secrets are read here and never serialised to the client.
 // Anything the UI needs to know is exposed through publicConfig() without secret values.
@@ -42,7 +43,10 @@ export const config = {
   // the client. OPENAI_API_KEY is the primary name; ASTRA_API_KEY is accepted
   // as a fallback for older setups.
   openai: {
-    apiKey: process.env.OPENAI_API_KEY || process.env.ASTRA_API_KEY || "",
+    // A key saved on the Settings page wins over the environment variable (see lib/secrets).
+    get apiKey() {
+      return secretValue("openaiApiKey");
+    },
     baseUrl: (process.env.OPENAI_BASE_URL || process.env.ASTRA_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
     model: process.env.OPENAI_MODEL || process.env.ASTRA_MODEL || "gpt-6-astra",
   },
@@ -52,8 +56,12 @@ export const config = {
   // (see scrubSecrets). HF_API_KEY_ID / HF_API_KEY_SECRET are the primary names;
   // HIGGSFIELD_* are accepted as fallbacks.
   higgsfield: {
-    apiKeyId: process.env.HF_API_KEY_ID || process.env.HIGGSFIELD_API_KEY_ID || "",
-    apiKeySecret: process.env.HF_API_KEY_SECRET || process.env.HIGGSFIELD_API_KEY_SECRET || "",
+    get apiKeyId() {
+      return secretValue("hfApiKeyId");
+    },
+    get apiKeySecret() {
+      return secretValue("hfApiKeySecret");
+    },
     baseUrl: (process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai").replace(/\/$/, ""),
     // The live Higgsfield wire mapping is UNVERIFIED against the official docs.
     // It refuses to make network calls unless this is explicitly set to "true",
