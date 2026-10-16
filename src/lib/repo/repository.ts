@@ -41,17 +41,20 @@ export interface StudioRepository {
   updateStep(id: string, patch: Partial<Omit<WorkflowStep, "id" | "workflowId">>): void;
 
   listGenerations(jobId: string): Generation[];
+  listAllGenerations(): Generation[]; // every job at once, for list screens
   listActiveGenerations(): Generation[];
   insertGeneration(g: Generation): void;
   updateGeneration(id: string, patch: Partial<Omit<Generation, "id" | "jobId">>): Generation;
   getGeneration(id: string): Generation | null;
 
   listRevisions(jobId: string): Revision[];
+  listAllRevisions(): Revision[]; // every job at once, for list screens
   getRevision(id: string): Revision | null;
   insertRevision(r: Revision): void;
   updateRevision(id: string, patch: Partial<Omit<Revision, "id" | "jobId">>): void;
 
   listApprovals(jobId?: string): ApprovalRequest[];
+  countPendingApprovals(): number;
   getApproval(id: string): ApprovalRequest | null;
   insertApproval(a: ApprovalRequest): void;
   updateApproval(id: string, patch: Partial<Omit<ApprovalRequest, "id" | "jobId">>): void;
@@ -90,6 +93,7 @@ export interface StudioRepository {
 
   // --- small key/value settings edited in the UI ---
   getSetting(key: string): string | null;
+  listSettings(): { key: string; value: string }[]; // everything except login throttling rows
   setSetting(key: string, value: string): void;
   deleteSetting(key: string): void;
 
