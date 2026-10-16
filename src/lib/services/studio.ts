@@ -19,6 +19,8 @@ import type {
 import { getModel } from "@/lib/higgsfield/catalog";
 import { getProvider } from "@/lib/higgsfield/provider";
 import { getRepo } from "@/lib/repo";
+import { audit } from "./audit";
+import { decide } from "./decision";
 import { computeProfitability } from "./economics";
 import {
   GuardrailError,
@@ -120,6 +122,7 @@ export interface NewJobInput {
   referenceAssets: string[];
   sourceFeePct?: number;
   contingencyPct?: number;
+  templateId?: string | null;
 }
 
 export async function createJob(input: NewJobInput) {
@@ -138,6 +141,7 @@ export async function createJob(input: NewJobInput) {
     sourceFeePct: input.sourceFeePct ?? config.economics.sourceFeePct[input.source],
     contingencyPct: input.contingencyPct ?? config.economics.defaultContingencyPct,
     rightsCleared: false,
+    templateId: input.templateId ?? null,
     deliveredAt: null,
     createdAt: now(),
     updatedAt: now(),
@@ -206,6 +210,7 @@ export function replanFromIntake(jobId: string) {
       log(jobId, "system", `No catalog price for ${costPlan.unpricedCapabilities.join(", ")} — left out of the plan and routed to human review.`);
     }
     log(jobId, "agent", `Production plan v${version}: ${workflow.steps.length} steps, est. $${workflow.estimatedTotalCost.toFixed(2)}, proposed cap $${workflow.maxBudget}.`);
+    audit({ jobId, kind: "decision", summary: `${draft.analyzer} recommended "${decision}" (${Math.round(analysis.confidence * 100)}% confidence, ${workflow.steps.length}-step plan, est. $${workflow.estimatedTotalCost.toFixed(2)}).`, detail: rationale.join(" ") });
 
     if (decision === "reject") {
       repo.updateJob(jobId, { status: "rejected", rightsCleared: false });
@@ -293,6 +298,7 @@ export function approveInitialWorkflow(jobId: string, maxBudget: number) {
     }
     repo.updateJob(jobId, { status: "approved" });
     log(jobId, "operator", `Approved workflow v${wf.version} with a $${maxBudget} generation cap. Agent may operate inside this limit.`);
+    audit({ jobId, kind: "approval", actor: "operator", summary: `Approved workflow v${wf.version} and a $${maxBudget} generation cap.`, costDeltaUsd: null });
   });
 }
 
@@ -399,6 +405,7 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
     const r = await provider.submit({ generationId: gen.id, modelId: step.modelId, prompt, costEstimate: estimate });
     repo.updateGeneration(gen.id, { providerRequestId: r.providerRequestId, statusUrl: r.statusUrl, status: r.status });
     log(job.id, "agent", `Submitted take ${attempt} of “${step.name}” on ${model.label} (${model.endpoint}); est. $${estimate.toFixed(2)}, request ${r.providerRequestId}.`);
+    audit({ jobId: job.id, kind: "generation", summary: `Submitted take ${attempt} of “${step.name}” on ${model.label}.`, costDeltaUsd: estimate });
   } catch (err) {
     // Failed submit is never charged (status "failed", actualCost 0). Scrub secrets.
     repo.updateGeneration(gen.id, { status: "failed", error: scrubSecrets((err as Error).message), completedAt: now(), actualCost: 0 });
@@ -419,6 +426,7 @@ function blockForBudget(job: Job, wf: Workflow, step: WorkflowStep, needed: numb
     proposed,
     step.id,
   );
+  audit({ jobId: job.id, kind: "escalation", summary: `Paused “${step.name}” — $${spent.toFixed(2)} committed + $${needed.toFixed(2)} needed exceeds the $${wf.maxBudget} cap.`, detail: "Requested a budget increase. The agent cannot spend past the approved cap." });
 }
 
 /** Advance production: poll in-flight work, then submit the next step if (and only if) it fits the cap. */
@@ -530,6 +538,7 @@ export async function tick(jobId: string) {
   if (allStepsDone && !inFlight(endGens) && !revisionsRunning) {
     repo.updateJob(jobId, { status: "qa" });
     log(jobId, "agent", "Production complete. Moved to QA for human review.");
+    audit({ jobId, kind: "decision", summary: "Production complete → moved to QA. Final delivery awaits human approval." });
     requestApproval(jobId, "final_delivery", "Approve final delivery", "Review outputs. Delivery to the client is done by you, outside Studio Operator.", null, null);
   }
 }
@@ -557,6 +566,7 @@ export async function approveBudgetIncrease(jobId: string, approvalId: string, n
       if (rev) repo.updateRevision(rev.id, { approvalStatus: "approved" });
     }
     log(jobId, "operator", `Raised generation cap from $${wf.maxBudget} to $${newCap}.`);
+    audit({ jobId, kind: "approval", actor: "operator", summary: `Raised generation cap from $${wf.maxBudget} to $${newCap}.` });
   });
   await tick(jobId);
 }
@@ -743,6 +753,7 @@ export function approveFinalDelivery(jobId: string, attestation: string) {
     decideApproval(delivery.id, "approved", config.operatorName);
     repo.updateJob(jobId, { status: "delivered", deliveredAt: now() });
     log(jobId, "operator", `Approved final delivery (${selected.length} selected outputs). ${attestation}`);
+    audit({ jobId, kind: "approval", actor: "operator", summary: `Approved final delivery (${selected.length} selected outputs).` });
   });
 }
 

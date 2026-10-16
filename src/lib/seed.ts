@@ -1,5 +1,7 @@
 import "server-only";
 import { getRepo } from "@/lib/repo";
+import * as agency from "@/lib/services/agency";
+import { audit } from "@/lib/services/audit";
 import {
   addRevision,
   approveFinalDelivery,
@@ -89,6 +91,79 @@ function clearOpenRights(jobId: string) {
   for (const a of getRepo().listApprovals(jobId).filter((x) => x.kind === "rights_clearance" && x.status === "pending")) {
     clearRights(jobId, a.id, "Brand assets confirmed with the client.");
   }
+/**
+ * After the Rain: Glass Monument — the full supervised client relationship on the
+ * Launch Video template: one missing-input question, asset requests, a proposal,
+ * a concept presentation, a real-milestone update, an auto self-repair of the
+ * continuity/reflection failure, the "warmer & more hopeful" revision, and a
+ * delivery package held for human approval.
+ */
+async function superviseGlass(jobId: string) {
+  const repo = getRepo();
+  // 1. Intake — the single material missing question, then specific asset requests + a proposal.
+  agency.askClientQuestion(jobId, "Before we lock the look: should the monument read as cast (frosted) glass or clear float glass? It changes the reflections and the after-storm highlight.");
+  agency.runIntakeConversation(jobId);
+  agency.sendProposal(jobId);
+  // 2. Present concepts for the client's call.
+  agency.presentConcept(jobId, { changed: "locked the storm → clear arc on approved keyframes and kept the monument consistent across shots", decisionNeeded: "pick the hero keyframe for the final reveal" });
+  // 3. A real-milestone progress update.
+  agency.sendProgressUpdate(jobId, "keyframes_approved");
+  // 4. Supervised self-repair on the QA pass — auto-fix within the spend limits.
+  await agency.applySelfRepairs(jobId);
+  await fastForward(jobId, (s) => s === "qa");
+  agency.sendProgressUpdate(jobId, "qa_passed");
+  // 5. Client revision — warmer, more hopeful reveal → interpreted as an included finishing edit.
+  const note = "Make the final reveal warmer and more hopeful.";
+  agency.replyToRevision(jobId, note, 2, "D1");
+  const revId = addRevision(jobId, note, "D1");
+  const rev = repo.getRevision(revId);
+  if (rev && rev.approvalStatus === "approved" && rev.modelId) {
+    await runRevision(jobId, revId);
+    await fastForward(jobId, (s) => s === "qa");
+  }
+  agency.sendProgressUpdate(jobId, "revision_complete");
+  // Select the finished masters so a delivery package exists.
+  for (const g of repo.listGenerations(jobId).filter((x) => x.status === "completed")) {
+    const step = repo.getCurrentWorkflow(jobId)?.steps.find((s) => s.id === g.stepId);
+    if (step && (step.category === "finishing" || step.category === "video") && !repo.listGenerations(jobId).some((x) => x.stepId === g.stepId && x.selected)) {
+      repo.updateGeneration(g.id, { selected: true });
+    }
+  }
+  // 6. Delivery package drafted — held for your approval (final delivery always needs you).
+  agency.draftDelivery(jobId);
+  agency.evaluatePauses(jobId);
+}
+
+/**
+ * Night Orchard: Slow Orbit — a shorter, bespoke route focused on atmosphere,
+ * low-light detail and smooth camera motion, with a recorded route comparison and
+ * a spend-limit escalation that shows the agent cannot pick the premium route on its own.
+ */
+async function superviseOrchard(jobId: string) {
+  const repo = getRepo();
+  audit({
+    jobId,
+    kind: "decision",
+    summary: "Route comparison for the orbit: Kling O3 image-reference vs Cinema Studio.",
+    detail: "Chose Kling O3 image-reference — it holds spatial continuity and low-light detail through a slow orbit at roughly half the per-shot cost. Cinema Studio is reserved for cinematic lensing this piece does not need.",
+  });
+  agency.escalate(
+    jobId,
+    "spend_limit",
+    "Premium motion route needs your approval",
+    "The Cinema Studio route for the orbit would exceed the per-job automatic-spend limit.",
+    "Keep the Kling O3 image-reference route (recommended) or approve a higher cap for Cinema Studio.",
+  );
+  agency.sendProgressUpdate(jobId, "qa_passed");
+  await agency.applySelfRepairs(jobId);
+  await fastForward(jobId, (s) => s === "qa");
+  for (const g of repo.listGenerations(jobId).filter((x) => x.status === "completed")) {
+    const step = repo.getCurrentWorkflow(jobId)?.steps.find((s) => s.id === g.stepId);
+    if (step && (step.category === "finishing" || step.category === "video") && !repo.listGenerations(jobId).some((x) => x.stepId === g.stepId && x.selected)) {
+      repo.updateGeneration(g.id, { selected: true });
+    }
+  }
+  agency.draftDelivery(jobId);
 }
 
 export async function seedDemo() {
@@ -187,6 +262,7 @@ export async function seedDemo() {
       "weather-arc-notes.md",
       "likes-and-dislikes.pdf",
     ],
+    templateId: "launch-video",
   });
   clearOpenRights(glass);
   approveInitialWorkflow(glass, repo.getCurrentWorkflow(glass)!.maxBudget);
@@ -209,6 +285,33 @@ export async function seedDemo() {
   await startProduction(orchard);
   await fastForward(orchard, (s) => s === "qa");
 
+  // --- Supervised autonomy: settings, client memory, and the two demo runs ---
+  agency.getAutonomy(); // ensure the single account-level settings row exists
+  agency.upsertClientMemory({
+    displayName: "Glasverk Studio",
+    colors: ["#0b1f2a", "#9fd8e6"],
+    fonts: ["Söhne", "GT Sectra"],
+    logos: ["glasverk-wordmark.svg"],
+    tone: "quiet, architectural, premium",
+    productDetails: ["Translucent glass monument on an open plaza", "Architecture, material, scale and site stay consistent across shots"],
+    winningAssets: ["after-rain reflection keyframe"],
+    rejectedStyles: ["neon", "fast cuts", "heavy lens flares"],
+    deliveryPreferences: "4K masters, both 9:16 and 16:9",
+    communicationPreferences: "Email · concise updates at real milestones",
+  });
+  agency.upsertClientMemory({
+    displayName: "Lumen Films",
+    colors: ["#0a0d12", "#1b2a3a"],
+    tone: "atmospheric, low-light, unhurried",
+    productDetails: ["Night-orchard world", "Preserve depth and spatial continuity through a slow orbit"],
+    rejectedStyles: ["high-key lighting", "text on screen"],
+    deliveryPreferences: "1080p, 16:9",
+    communicationPreferences: "Direct email",
+  });
+
+  await superviseGlass(glass);
+  await superviseOrchard(orchard);
+
   // 6. Fresh lead, not yet analysed.
   const libraryId = `job_seedlibrary${Date.now().toString(36).slice(-4)}`;
   const t = new Date().toISOString();
@@ -226,6 +329,7 @@ export async function seedDemo() {
     sourceFeePct: 0,
     contingencyPct: 0.2,
     rightsCleared: false,
+    templateId: null,
     deliveredAt: null,
     createdAt: t,
     updatedAt: t,

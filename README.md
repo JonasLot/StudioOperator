@@ -119,6 +119,18 @@ Each output gets a verdict: **acceptable as a concept / needs a controlled edit 
 
 When the verdict calls for a fix, `src/lib/qa/repair.ts` proposes a **targeted repair** and shows its economics up front — reason, selected model, expected incremental cost, new total, updated margin. A repair runs automatically **only** within the pre-approved limits (per-repair, per-job, and max auto-repairs — `QA_PER_REPAIR_MAX_USD`, `QA_PER_JOB_REPAIR_MAX_USD`, `QA_MAX_AUTO_REPAIRS`, `QA_REPAIR_ATTEMPTS`, all in `src/lib/config.ts`). Anything over a limit is recommended but requires human approval; the blocking limit is named.
 
+## Supervised autonomy (the Client Agent)
+
+Studio Operator runs as a **supervised autonomous creative agency**: the agent runs the routine client relationship from intake through revisions, while the human stays responsible for the promises that matter — accepting contracts, approving payments or spend above a threshold, resolving rights/identity, and approving final delivery.
+
+- **Client Agent** (`src/lib/agency/client-agent.ts`, pure + tested) turns a vague request into a structured intake conversation, asks only the questions that materially affect quality/cost/rights/deadline, requests specific assets (product image, logo, brand guide, exact copy, pronunciation, voice/likeness consent, likes and dislikes), summarizes scope, drafts a proposal, sends real-milestone progress updates, presents concepts with what changed + the decision needed, interprets revision feedback (which asset/step, included vs scope change), drafts a change order when scope is exceeded, prepares the delivery package + usage notes, and drafts a post-delivery feedback/testimonial/recurring-package ask.
+- **Marketplace-safe messaging** (`src/lib/services/agency.ts`): a message is auto-sent only on an allowed channel (direct email / approved first-party portal) and only for a type enabled in Autonomy Settings. **Third-party marketplaces are never auto-sent** — no scraping, auto-apply, proposal send, or contract accept — until the app receives an approved integration for that exact action.
+- **Autonomy Settings** (`/autonomy`): max automatic spend per job and per repair, max attempts per step, allowed model families, which messages may be sent automatically vs drafted, whether concepts auto-share, whether final delivery always needs approval, and the conditions that **always pause** (likeness/voice, unclear ownership, factual claims, packaging/regulated copy, negative margin, deadline risk, client dispute).
+- **Client memory** (account level): approved logos, colours, fonts, tone, product details, winning assets, rejected styles, delivery and communication preferences — never treated as consent for a new person's likeness, voice, or a materially different use.
+- **Productized service templates** (`src/lib/agency/templates.ts`): **Launch Video**, **UGC Ad Pack**, **Localization Pack**. Each fixes required inputs, accepted file types, model recipe, quality checklist, included revisions, delivery package, target gross margin, maximum production spend and escalation conditions — that fixity is what makes autonomy possible.
+- **Supervised self-repair** (`src/lib/agency/self-repair.ts`): compares each output with the approved brief, finds the smallest failed component, chooses the smallest fix (targeted edit / regenerate one shot / change model / ask the client), estimates incremental cost against the remaining budget, and continues automatically **only** inside the pre-approved spend limit and with no new rights/factual/identity concern. Everything else escalates with a recommended action.
+- **Autonomy audit log**: every model decision, message draft/send, approval, generation, repair, cost change and escalation is recorded, so the demo makes clear the agent runs the job while the human supervises.
+
 ## Recording mode (`/present`)
 
 A single-screen walkthrough built for screen-recording the whole flow (`src/app/present/page.tsx` + `presenter.tsx`):
@@ -127,12 +139,13 @@ A single-screen walkthrough built for screen-recording the whole flow (`src/app/
 - **One-click reset** to the seeded briefs.
 - A **cost ledger** (every generation attempt: model, take, status, estimate, recorded spend + total) and a **side-by-side profit strip** (client price · channel fee · API cost · contingency · expected gross profit).
 - The **QA checklist** per output with its verdict and the transparent repair decision.
+- A supervised-autonomy strip, the **Client Agent** message thread (drafted vs auto-sent, with channel), client memory + template, the **supervised self-repair** decisions, **escalations to you**, the **final-delivery approval gate**, and the **autonomy audit log**.
 - A **final-deliverables grid** with download links and a **client-ready delivery note drafted by Astra**.
 
 Two showcase briefs demonstrate different routes:
 
-- **After the Rain: Glass Monument** — a fixed-package cinematic film in 9:16 **and** 16:9 plus three approved keyframes. Route: cheap concept keyframes → premium cinematic motion (Cinema Studio) → edit → finishing, with a targeted *continuity/reflection* repair.
-- **Night Orchard: Slow Orbit** — one atmospheric sequence around a smooth orbiting camera move plus a hero still. A *different* route built on Kling O3 image-reference to hold spatial continuity through the orbit.
+- **After the Rain: Glass Monument** — runs the **full supervised workflow** on the Launch Video template: one missing-input question, asset requests, a proposal and concept presentation, a real-milestone update, an auto self-repair of the continuity/reflection failure within limits (the rest escalated once budget ran low), a *"warmer and more hopeful"* revision interpreted as an included finishing edit, and a delivery package **held for your approval**.
+- **Night Orchard: Slow Orbit** — a shorter, bespoke route focused on atmosphere, low-light detail and smooth camera motion, with a recorded route comparison (Kling O3 image-reference vs Cinema Studio) and a **spend-limit escalation** showing the agent cannot pick the premium route on its own.
 
 Mock mode is enforced for the demo — the header shows a **"no external calls, no secrets"** badge and the browser never receives API keys or private client data (`publicConfig()` strips them).
 

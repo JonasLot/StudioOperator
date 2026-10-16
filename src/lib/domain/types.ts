@@ -35,6 +35,7 @@ export interface Job {
   sourceFeePct: number; // 0..1 — platform / channel fee taken from client price
   contingencyPct: number; // 0..1 — buffer on generation spend
   rightsCleared: boolean; // human has acknowledged/cleared rights concerns
+  templateId: string | null; // productized service template, when the job runs on one
   deliveredAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -218,6 +219,124 @@ export interface IntakeAnalysis {
   createdAt: string;
 }
 
+// ===========================================================================
+// Supervised autonomy: the Client Agent, autonomy settings, client memory,
+// audit log and escalations. The agent runs the routine client relationship;
+// the human stays responsible for the promises that matter.
+// ===========================================================================
+
+/** Messages the Client Agent can produce. Each is either auto-sendable or drafted for approval. */
+export const MESSAGE_TYPES = [
+  "intake_questions",
+  "asset_request",
+  "proposal",
+  "progress_update",
+  "concept_presentation",
+  "revision_reply",
+  "change_order",
+  "delivery",
+  "feedback_request",
+] as const;
+export type MessageType = (typeof MESSAGE_TYPES)[number];
+
+/** Where a message would go. Third-party marketplaces are never auto-sent without an approved integration. */
+export type MessageChannel = "marketplace" | "direct_email" | "client_portal";
+export type AgentMessageStatus = "drafted" | "approved" | "sent" | "blocked";
+
+export interface AgentMessage {
+  id: string;
+  jobId: string;
+  type: MessageType;
+  channel: MessageChannel;
+  subject: string;
+  body: string;
+  status: AgentMessageStatus;
+  autoAllowed: boolean; // autonomy settings + channel rules permit sending without approval
+  heldReason: string | null; // why it is drafted rather than auto-sent
+  createdAt: string;
+  sentAt: string | null;
+}
+
+/** Every consequential thing the agent did or proposed, for the autonomy audit log. */
+export const AUDIT_KINDS = [
+  "decision",
+  "message_draft",
+  "message_sent",
+  "approval",
+  "generation",
+  "repair",
+  "cost_change",
+  "escalation",
+  "memory",
+] as const;
+export type AuditKind = (typeof AUDIT_KINDS)[number];
+
+export interface AuditEntry {
+  id: string;
+  jobId: string | null;
+  kind: AuditKind;
+  actor: "agent" | "operator" | "system";
+  summary: string;
+  detail: string | null; // optional human-readable extra context
+  costDeltaUsd: number | null; // for generation / repair / cost_change entries
+  createdAt: string;
+}
+
+/** Conditions that always pause the workflow for a human, regardless of spend. */
+export const PAUSE_CONDITIONS = [
+  "likeness_or_voice",
+  "unclear_ownership",
+  "factual_claims",
+  "packaging_or_regulated",
+  "negative_margin",
+  "deadline_risk",
+  "client_dispute",
+] as const;
+export type PauseCondition = (typeof PAUSE_CONDITIONS)[number];
+
+export interface AutonomySettings {
+  id: string; // "default" — single account-level row for the demo
+  maxAutoSpendPerJobUsd: number;
+  maxAutoSpendPerRepairUsd: number;
+  maxAttemptsPerStep: number;
+  allowedModelFamilies: string[]; // catalog model families the agent may choose automatically
+  autoSendMessageTypes: MessageType[]; // which messages may be sent without approval
+  autoShareConcepts: boolean;
+  finalDeliveryAlwaysApproval: boolean;
+  alwaysPause: Record<PauseCondition, boolean>;
+  updatedAt: string;
+}
+
+export interface Escalation {
+  id: string;
+  jobId: string | null;
+  reason: PauseCondition | "spend_limit" | "new_concern" | "qa";
+  title: string;
+  detail: string;
+  recommendedAction: string;
+  status: "open" | "resolved";
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+/** Account-level memory about a client. Never consent for a new person's likeness/voice or a new use. */
+export interface ClientMemory {
+  id: string;
+  clientKey: string; // normalized client name
+  displayName: string;
+  logos: string[];
+  colors: string[];
+  fonts: string[];
+  tone: string | null;
+  productDetails: string[];
+  winningAssets: string[];
+  rejectedStyles: string[];
+  deliveryPreferences: string | null;
+  communicationPreferences: string | null;
+  updatedAt: string;
+}
+
 export interface JobBundle {
   job: Job;
   analysis: BriefView | null;
@@ -253,4 +372,44 @@ export const CATEGORY_LABEL: Record<ModelCategory, string> = {
   voice: "Voice",
   editing: "Editing",
   finishing: "Finishing",
+};
+
+export const MESSAGE_TYPE_LABEL: Record<MessageType, string> = {
+  intake_questions: "Intake questions",
+  asset_request: "Asset request",
+  proposal: "Proposal",
+  progress_update: "Progress update",
+  concept_presentation: "Concept presentation",
+  revision_reply: "Revision reply",
+  change_order: "Change order",
+  delivery: "Delivery",
+  feedback_request: "Feedback request",
+};
+
+export const CHANNEL_LABEL: Record<MessageChannel, string> = {
+  marketplace: "Marketplace",
+  direct_email: "Direct email",
+  client_portal: "Client portal",
+};
+
+export const PAUSE_LABEL: Record<PauseCondition, string> = {
+  likeness_or_voice: "Likeness or voice",
+  unclear_ownership: "Unclear asset ownership",
+  factual_claims: "Factual advertising claims",
+  packaging_or_regulated: "Exact packaging / regulated copy",
+  negative_margin: "Negative expected margin",
+  deadline_risk: "Missed-deadline risk",
+  client_dispute: "Client dispute",
+};
+
+export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
+  decision: "Decision",
+  message_draft: "Message drafted",
+  message_sent: "Message sent",
+  approval: "Approval",
+  generation: "Generation",
+  repair: "Repair",
+  cost_change: "Cost change",
+  escalation: "Escalation",
+  memory: "Client memory",
 };

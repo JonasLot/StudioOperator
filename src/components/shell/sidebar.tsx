@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, FolderOpen, Layers, LayoutGrid, Settings2, ShieldCheck, Split, Images } from "lucide-react";
+import { Bot, ChevronRight, FolderOpen, Layers, LayoutGrid, Settings2, ShieldCheck, Split, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -11,7 +11,8 @@ const NAV = [
   { href: "/approvals", label: "Approvals", icon: ShieldCheck, match: (p: string) => p.startsWith("/approvals"), badge: "approvals" as const },
   { href: "/outputs", label: "Outputs", icon: Images, match: (p: string) => p.startsWith("/outputs") },
   { href: "/models", label: "Model router", icon: Split, match: (p: string) => p.startsWith("/models") },
-  { href: "/settings", label: "Autonomy & connections", icon: Settings2, match: (p: string) => p.startsWith("/settings") },
+  { href: "/autonomy", label: "Autonomy", icon: Bot, match: (p: string) => p.startsWith("/autonomy") },
+  { href: "/settings", label: "Connections", icon: Settings2, match: (p: string) => p.startsWith("/settings") },
 ];
 
 export function Logo({ compact = false }: { compact?: boolean }) {

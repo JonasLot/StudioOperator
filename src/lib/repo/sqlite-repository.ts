@@ -3,7 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   ActivityEvent,
+  AgentMessage,
   ApprovalRequest,
+  AuditEntry,
+  AutonomySettings,
+  BriefAnalysis,
+  ClientMemory,
+  Escalation,
   Generation,
   IntakeAnalysis,
   Job,
@@ -84,6 +90,11 @@ const SPEC = {
   approval: {},
   activity: {},
   asset: {},
+  autonomy: { json: ["allowedModelFamilies", "autoSendMessageTypes", "alwaysPause"], bool: ["autoShareConcepts", "finalDeliveryAlwaysApproval"] },
+  clientMemory: { json: ["logos", "colors", "fonts", "productDetails", "winningAssets", "rejectedStyles"] },
+  message: { bool: ["autoAllowed"] },
+  audit: {},
+  escalation: {},
 } satisfies Record<string, FieldSpec>;
 
 // ---------- repository ----------
@@ -105,7 +116,7 @@ export class SqliteStudioRepository implements StudioRepository {
   // CREATE TABLE IF NOT EXISTS does not add columns to an existing table, so new
   // nullable columns are added here; a duplicate-column error just means it's present.
   private migrate() {
-    for (const sql of ["ALTER TABLE generations ADD COLUMN timed_out_at TEXT"]) {
+    for (const sql of ["ALTER TABLE generations ADD COLUMN timed_out_at TEXT", "ALTER TABLE jobs ADD COLUMN template_id TEXT"]) {
       try {
         this.db.exec(sql);
       } catch {
@@ -285,9 +296,70 @@ export class SqliteStudioRepository implements StudioRepository {
     return this.one<StoredAsset>("SELECT * FROM assets WHERE id = ?", SPEC.asset, id);
   }
 
+  // --- supervised autonomy ---
+  getAutonomy() {
+    return this.one<AutonomySettings>("SELECT * FROM autonomy_settings WHERE id = 'default'", SPEC.autonomy);
+  }
+  upsertAutonomy(s: AutonomySettings) {
+    if (this.getAutonomy()) this.patch("autonomy_settings", "default", { ...s, id: "default" }, SPEC.autonomy);
+    else this.insert("autonomy_settings", { ...s, id: "default" }, SPEC.autonomy);
+  }
+
+  listClientMemory() {
+    return this.all<ClientMemory>("SELECT * FROM client_memory ORDER BY display_name", SPEC.clientMemory);
+  }
+  getClientMemory(clientKey: string) {
+    return this.one<ClientMemory>("SELECT * FROM client_memory WHERE client_key = ?", SPEC.clientMemory, clientKey);
+  }
+  upsertClientMemory(m: ClientMemory) {
+    const existing = this.getClientMemory(m.clientKey);
+    if (existing) this.patch("client_memory", existing.id, { ...m, id: existing.id }, SPEC.clientMemory);
+    else this.insert("client_memory", m, SPEC.clientMemory);
+  }
+
+  listAgentMessages(jobId?: string) {
+    return jobId
+      ? this.all<AgentMessage>("SELECT * FROM agent_messages WHERE job_id = ? ORDER BY created_at", SPEC.message, jobId)
+      : this.all<AgentMessage>("SELECT * FROM agent_messages ORDER BY created_at", SPEC.message);
+  }
+  getAgentMessage(id: string) {
+    return this.one<AgentMessage>("SELECT * FROM agent_messages WHERE id = ?", SPEC.message, id);
+  }
+  insertAgentMessage(m: AgentMessage) {
+    this.insert("agent_messages", m, SPEC.message);
+  }
+  updateAgentMessage(id: string, patch: Partial<AgentMessage>) {
+    this.patch("agent_messages", id, patch, SPEC.message);
+  }
+
+  listAudit(jobId?: string) {
+    return jobId
+      ? this.all<AuditEntry>("SELECT * FROM audit_log WHERE job_id = ? ORDER BY created_at, rowid", SPEC.audit, jobId)
+      : this.all<AuditEntry>("SELECT * FROM audit_log ORDER BY created_at, rowid", SPEC.audit);
+  }
+  insertAudit(e: AuditEntry) {
+    this.insert("audit_log", e, SPEC.audit);
+  }
+
+  listEscalations(jobId?: string) {
+    return jobId
+      ? this.all<Escalation>("SELECT * FROM escalations WHERE job_id = ? ORDER BY created_at", SPEC.escalation, jobId)
+      : this.all<Escalation>("SELECT * FROM escalations ORDER BY created_at", SPEC.escalation);
+  }
+  getEscalation(id: string) {
+    return this.one<Escalation>("SELECT * FROM escalations WHERE id = ?", SPEC.escalation, id);
+  }
+  insertEscalation(e: Escalation) {
+    this.insert("escalations", e, SPEC.escalation);
+  }
+  updateEscalation(id: string, patch: Partial<Escalation>) {
+    this.patch("escalations", id, patch, SPEC.escalation);
+  }
+
   wipe() {
     this.db.exec(
       "DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
+      "DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM brief_analyses; DELETE FROM jobs;",
     );
   }
 }

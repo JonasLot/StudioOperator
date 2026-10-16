@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { publicConfig } from "@/lib/config";
-import type { BriefView, Job } from "@/lib/domain/types";
+import { getTemplate } from "@/lib/agency/templates";
+import type { BriefAnalysis, Job } from "@/lib/domain/types";
 import { getModel } from "@/lib/higgsfield/catalog";
 import { ensureSeeded } from "@/lib/seed";
+import * as agency from "@/lib/services/agency";
 import { generationSpend } from "@/lib/services/economics";
 import { jobQa } from "@/lib/services/qa";
 import { getBundle, getDashboard, profitabilityFor } from "@/lib/services/studio";
@@ -40,9 +42,22 @@ export default async function PresentPage(props: PageProps<"/present">) {
   const selectedId = typeof sp.job === "string" && jobs.some((j) => j.id === sp.job) ? sp.job : jobs[0].id;
   const bundle = getBundle(selectedId);
   if (!bundle) notFound();
-  const { job, analysis, workflow, generations } = bundle;
+  const { job, analysis, workflow, generations, approvals } = bundle;
   const p = profitabilityFor(bundle);
   const qa = jobQa(job.id);
+
+  const settings = agency.getAutonomy();
+  const template = getTemplate(job.templateId);
+  const memory = agency.getClientMemoryForJob(job);
+  const messages = agency.listMessages(job.id).map((m) => ({ id: m.id, type: m.type, channel: m.channel, subject: m.subject, body: m.body, status: m.status, autoAllowed: m.autoAllowed, heldReason: m.heldReason }));
+  const auditLog = agency.listAudit(job.id).map((a) => ({ kind: a.kind, actor: a.actor, summary: a.summary, detail: a.detail, costDeltaUsd: a.costDeltaUsd }));
+  const escalations = agency.listEscalations(job.id).map((e) => ({ id: e.id, reason: e.reason, title: e.title, detail: e.detail, recommendedAction: e.recommendedAction, status: e.status }));
+  const selfRepairs = agency.planSelfRepairs(job.id).map((r) => ({
+    stepName: r.stepName, modelLabel: r.modelLabel, component: r.decision.smallestFailedComponent,
+    action: r.decision.recommendedAction, auto: r.decision.auto, incrementalCostUsd: r.decision.incrementalCostUsd,
+    recommendation: r.decision.recommendation, escalationReason: r.decision.escalationReason,
+  }));
+  const deliveryPending = approvals.some((a) => a.kind === "final_delivery" && a.status === "pending");
 
   const gens = generations
     .filter((g) => !g.revisionId)
@@ -74,6 +89,21 @@ export default async function PresentPage(props: PageProps<"/present">) {
     qa,
     deliverables,
     deliveryNote: draftDeliveryNote(job, analysis, selected.length),
+    autonomy: {
+      maxAutoSpendPerJobUsd: settings.maxAutoSpendPerJobUsd,
+      maxAutoSpendPerRepairUsd: settings.maxAutoSpendPerRepairUsd,
+      maxAttemptsPerStep: settings.maxAttemptsPerStep,
+      autoSendMessageTypes: settings.autoSendMessageTypes,
+      autoShareConcepts: settings.autoShareConcepts,
+      finalDeliveryAlwaysApproval: settings.finalDeliveryAlwaysApproval,
+    },
+    template: template ? { name: template.name, deliverablesSummary: template.deliverablesSummary, includedRevisions: template.includedRevisions, targetGrossMarginPct: template.targetGrossMarginPct, maxProductionSpendUsd: template.maxProductionSpendUsd } : null,
+    clientMemory: memory ? { displayName: memory.displayName, tone: memory.tone, colors: memory.colors, fonts: memory.fonts, productDetails: memory.productDetails, rejectedStyles: memory.rejectedStyles, deliveryPreferences: memory.deliveryPreferences } : null,
+    messages,
+    auditLog,
+    escalations,
+    selfRepairs,
+    deliveryPending,
   };
 
   return <Presenter data={data} />;
