@@ -129,7 +129,12 @@ export async function reviewIntakeAction(jobId: string, edited: Analysis, action
   if (!parsed.ok) return { ok: false, error: `Analysis is invalid: ${parsed.error}` };
   return run(
     jobId,
-    () => intake.reviewIntake(jobId, { edited: parsed.analysis, action }),
+    () => {
+      const result = intake.reviewIntake(jobId, { edited: parsed.analysis, action });
+      // Edits change what was costed, so rebuild the plan from them (no-op once a workflow is approved).
+      if (result.changed && action !== "reject") studio.replanAfterReview(jobId);
+      return result;
+    },
     action === "approve" ? "Analysis approved." : action === "reject" ? "Job rejected." : "Edits saved.",
   );
 }

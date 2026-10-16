@@ -31,7 +31,7 @@ Priorities, in order:
 A beautiful result is not a correct result: judge by the brief, not by how it looks.
 
 Fields:
-- deliverables: each needs a format, and aspectRatio/duration/resolution when stated (null when not). exactTextRequirements holds only copy to be rendered or spoken verbatim — copy it character-for-character.
+- deliverables: one entry per distinct output, each with a format ("video", "still image" or "voiceover") and aspectRatio/duration/resolution when stated (null when not). Name them so a reader can tell what and how many: lead with the count when there is more than one ("6 × product stills"), and use the word "cutdown" for shorter edits of a main film. Give duration as "60s" or "2 min". exactTextRequirements holds only copy to be rendered or spoken verbatim — copy it character-for-character.
 - suppliedAssets vs missingAssets: what the client actually gave you vs what a producer still needs (product shots, logo files, brand guidelines, scripts, music, usage terms, references). List only what is truly missing.
 - questionsForClient: one specific, answerable question per gap or ambiguity ("Please send the vector logo and packshot for the 500 ml bottle"), not generic prompts.
 - rightsAndConsentFlags: flag exact logos, packaging or label text, a real person's likeness or voice, medical, financial or other factual/efficacy claims, trademarks and third-party IP, licensed music, and unclear ownership or usage rights. Use kind "impersonation" ONLY for deceptive depiction of a real person (e.g. a fake endorsement) — that is a hard stop.

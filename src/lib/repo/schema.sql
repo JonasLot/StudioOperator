@@ -21,27 +21,6 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS brief_analyses (
-  id TEXT PRIMARY KEY,
-  job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-  analyzer TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  deliverables TEXT NOT NULL,
-  dimensions TEXT NOT NULL,
-  durations TEXT NOT NULL,
-  "references" TEXT NOT NULL,
-  exact_text TEXT NOT NULL,
-  brand_constraints TEXT NOT NULL,
-  rights_concerns TEXT NOT NULL,
-  missing_information TEXT NOT NULL,
-  confidence REAL NOT NULL,
-  decision TEXT NOT NULL,
-  rationale TEXT NOT NULL,
-  estimated_shots INTEGER NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_analyses_job ON brief_analyses(job_id, created_at);
-
 -- Structured intake analysis (OpenAI Responses / mock) + the app's deterministic
 -- decision. `original` and `edited` hold the full analysis JSON so the model's
 -- output and the human-reviewed version can be compared.

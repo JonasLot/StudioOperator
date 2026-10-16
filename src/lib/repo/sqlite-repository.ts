@@ -4,7 +4,6 @@ import path from "node:path";
 import type {
   ActivityEvent,
   ApprovalRequest,
-  BriefAnalysis,
   Generation,
   IntakeAnalysis,
   Job,
@@ -77,19 +76,6 @@ function updateSql(table: string, cols: string[]) {
 
 const SPEC = {
   job: { json: ["referenceAssets"], bool: ["rightsCleared"] },
-  analysis: {
-    json: [
-      "deliverables",
-      "dimensions",
-      "durations",
-      "references",
-      "exactText",
-      "brandConstraints",
-      "rightsConcerns",
-      "missingInformation",
-      "rationale",
-    ],
-  },
   intake: { json: ["original", "edited", "decisionReasons"] },
   workflow: {},
   step: { json: ["inputs", "expectedOutputs", "deliverableIds"] },
@@ -171,29 +157,17 @@ export class SqliteStudioRepository implements StudioRepository {
     return (this.db.prepare("SELECT COUNT(*) AS n FROM jobs").get() as { n: number }).n;
   }
 
-  // analyses
-  getLatestAnalysis(jobId: string) {
-    return this.one<BriefAnalysis>(
-      "SELECT * FROM brief_analyses WHERE job_id = ? ORDER BY created_at DESC LIMIT 1",
-      SPEC.analysis,
-      jobId,
-    );
-  }
-  listLatestAnalyses() {
-    return this.all<BriefAnalysis>(
-      `SELECT a.* FROM brief_analyses a
-       JOIN (SELECT job_id, MAX(created_at) AS m FROM brief_analyses GROUP BY job_id) l
-       ON a.job_id = l.job_id AND a.created_at = l.m`,
-      SPEC.analysis,
-    );
-  }
-  insertAnalysis(a: BriefAnalysis) {
-    this.insert("brief_analyses", a, SPEC.analysis);
-  }
-
   // intake analyses (structured, with original vs human-edited)
   getLatestIntakeAnalysis(jobId: string) {
     return this.one<IntakeAnalysis>("SELECT * FROM intake_analyses WHERE job_id = ? ORDER BY created_at DESC LIMIT 1", SPEC.intake, jobId);
+  }
+  listLatestIntakeAnalyses() {
+    return this.all<IntakeAnalysis>(
+      `SELECT a.* FROM intake_analyses a
+       JOIN (SELECT job_id, MAX(created_at) AS m FROM intake_analyses GROUP BY job_id) l
+       ON a.job_id = l.job_id AND a.created_at = l.m`,
+      SPEC.intake,
+    );
   }
   getIntakeAnalysis(id: string) {
     return this.one<IntakeAnalysis>("SELECT * FROM intake_analyses WHERE id = ?", SPEC.intake, id);
@@ -313,7 +287,7 @@ export class SqliteStudioRepository implements StudioRepository {
 
   wipe() {
     this.db.exec(
-      "DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM brief_analyses; DELETE FROM jobs;",
+      "DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
     );
   }
 }

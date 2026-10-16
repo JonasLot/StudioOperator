@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { publicConfig } from "@/lib/config";
-import type { BriefAnalysis, Job } from "@/lib/domain/types";
+import type { BriefView, Job } from "@/lib/domain/types";
 import { getModel } from "@/lib/higgsfield/catalog";
 import { ensureSeeded } from "@/lib/seed";
 import { generationSpend } from "@/lib/services/economics";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const DEMO_TITLES = ["After the Rain: Glass Monument", "Night Orchard: Slow Orbit"];
 
-function draftDeliveryNote(job: Job, analysis: BriefAnalysis | null, selectedCount: number): string {
+function draftDeliveryNote(job: Job, analysis: BriefView | null, selectedCount: number): string {
   const deliverables = analysis?.deliverables.map((d) => (d.quantity > 1 ? `${d.quantity}× ` : "") + d.title).join(", ") || "the agreed deliverables";
   return [
     `Hi ${job.clientName ?? "there"},`,

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import type { BriefAnalysis, Generation, Job, Revision } from "@/lib/domain/types";
+import type { BriefView, Generation, Job, Revision } from "@/lib/domain/types";
 import type { Profitability } from "@/lib/services/economics";
 import { dateTime, usd } from "@/lib/utils";
 
@@ -23,7 +23,7 @@ const ACTION_LABEL: Record<Revision["recommendedAction"], string> = {
   clarify: "Clarify with client",
 };
 
-export function RevisionsTab({ job, analysis, revisions, profitability: p, generations }: { job: Job; analysis: BriefAnalysis | null; revisions: Revision[]; profitability: Profitability; generations: Generation[] }) {
+export function RevisionsTab({ job, analysis, revisions, profitability: p, generations }: { job: Job; analysis: BriefView | null; revisions: Revision[]; profitability: Profitability; generations: Generation[] }) {
   const { pending, error, exec } = useServerAction();
   const [note, setNote] = React.useState("");
   const [deliverable, setDeliverable] = React.useState("");

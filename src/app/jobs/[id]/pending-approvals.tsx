@@ -13,7 +13,7 @@ import {
 import { useServerAction } from "@/components/action-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { ApprovalRequest, BriefAnalysis, Generation, Job, Revision, Workflow } from "@/lib/domain/types";
+import type { ApprovalRequest, BriefView, Generation, Job, Revision, Workflow } from "@/lib/domain/types";
 import { SOURCE_LABEL } from "@/lib/domain/types";
 import { usd } from "@/lib/utils";
 
@@ -72,7 +72,7 @@ function WorkflowApproval({ a, job, workflow, rightsOpen }: { a: ApprovalRequest
   );
 }
 
-function RightsApproval({ a, job, analysis }: { a: ApprovalRequest; job: Job; analysis: BriefAnalysis | null }) {
+function RightsApproval({ a, job, analysis }: { a: ApprovalRequest; job: Job; analysis: BriefView | null }) {
   const { pending, error, exec } = useServerAction();
   const [note, setNote] = React.useState("");
   const [ack, setAck] = React.useState(false);
@@ -174,7 +174,7 @@ export function PendingApprovals({
 }: {
   job: Job;
   approvals: ApprovalRequest[];
-  analysis: BriefAnalysis | null;
+  analysis: BriefView | null;
   workflow: Workflow | null;
   generations: Generation[];
   revisions: Revision[];

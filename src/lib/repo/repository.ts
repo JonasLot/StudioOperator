@@ -1,7 +1,6 @@
 import type {
   ActivityEvent,
   ApprovalRequest,
-  BriefAnalysis,
   Generation,
   IntakeAnalysis,
   Job,
@@ -24,11 +23,8 @@ export interface StudioRepository {
   insertJob(job: Job): void;
   updateJob(id: string, patch: Partial<Omit<Job, "id" | "createdAt">>): Job;
 
-  getLatestAnalysis(jobId: string): BriefAnalysis | null;
-  listLatestAnalyses(): BriefAnalysis[];
-  insertAnalysis(a: BriefAnalysis): void;
-
   getLatestIntakeAnalysis(jobId: string): IntakeAnalysis | null;
+  listLatestIntakeAnalyses(): IntakeAnalysis[];
   getIntakeAnalysis(id: string): IntakeAnalysis | null;
   insertIntakeAnalysis(a: IntakeAnalysis): void;
   updateIntakeAnalysis(id: string, patch: Partial<Omit<IntakeAnalysis, "id" | "jobId" | "createdAt">>): void;

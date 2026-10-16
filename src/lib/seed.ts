@@ -84,6 +84,13 @@ async function fastForward(jobId: string, until: (status: string) => boolean, ma
   }
 }
 
+/** The demo operator confirms any open rights flags (e.g. exact logos) before approving a plan. */
+function clearOpenRights(jobId: string) {
+  for (const a of getRepo().listApprovals(jobId).filter((x) => x.kind === "rights_clearance" && x.status === "pending")) {
+    clearRights(jobId, a.id, "Brand assets confirmed with the client.");
+  }
+}
+
 export async function seedDemo() {
   const repo = getRepo();
 
@@ -98,6 +105,7 @@ export async function seedDemo() {
     clientNotes: "Repeat client potential — they run a winter campaign every year. Hiring manager: Ingrid.",
     referenceAssets: ["northlight-polar-lookbook.pdf", "https://example.com/northlight/moodboard"],
   });
+  clearOpenRights(aurora);
   approveInitialWorkflow(aurora, repo.getCurrentWorkflow(aurora)!.maxBudget);
   await startProduction(aurora);
   await fastForward(aurora, (s) => s === "qa");
@@ -130,6 +138,7 @@ export async function seedDemo() {
     clientNotes: "Came in via the contact form. Wants invoice in NOK.",
     referenceAssets: ["fjord-coffee-ss25-shoot.zip"],
   });
+  clearOpenRights(coffee);
   approveInitialWorkflow(coffee, repo.getCurrentWorkflow(coffee)!.maxBudget);
 
   // 4. Hard stop — rejected automatically.
@@ -179,6 +188,7 @@ export async function seedDemo() {
       "likes-and-dislikes.pdf",
     ],
   });
+  clearOpenRights(glass);
   approveInitialWorkflow(glass, repo.getCurrentWorkflow(glass)!.maxBudget);
   await startProduction(glass);
   await fastForward(glass, (s) => s === "qa");
@@ -194,6 +204,7 @@ export async function seedDemo() {
     clientNotes: "Atmospheric spec piece. Client supplies the approved orchard keyframe.",
     referenceAssets: ["orchard-world-keyframe.png", "low-light-palette.png", "orbit-camera-direction.pdf", "pacing-reference.mp4"],
   });
+  clearOpenRights(orchard);
   approveInitialWorkflow(orchard, repo.getCurrentWorkflow(orchard)!.maxBudget);
   await startProduction(orchard);
   await fastForward(orchard, (s) => s === "qa");

@@ -1,11 +1,13 @@
 import "server-only";
-import { analyzeBrief } from "@/lib/ai/brief-analyzer";
+import { computeCostPlan } from "@/lib/analysis/cost";
+import { buildWorkflow } from "@/lib/analysis/plan";
+import { deriveBriefFacts } from "@/lib/analysis/view";
 import { config, scrubSecrets } from "@/lib/config";
 import { persistAsset } from "@/lib/higgsfield/asset-store";
 import type {
   ApprovalKind,
   ApprovalRequest,
-  BriefAnalysis,
+  BriefView,
   Generation,
   Job,
   JobBundle,
@@ -17,7 +19,6 @@ import type {
 import { getModel } from "@/lib/higgsfield/catalog";
 import { getProvider } from "@/lib/higgsfield/provider";
 import { getRepo } from "@/lib/repo";
-import { decide } from "./decision";
 import { computeProfitability } from "./economics";
 import {
   GuardrailError,
@@ -28,8 +29,7 @@ import {
   fitsBudget,
 } from "./guardrails";
 import { newId } from "./ids";
-import { runIntakeAnalysis } from "./intake";
-import { buildWorkflow } from "./planner";
+import { briefView, effectiveAnalysis, getBrief, runIntakeAnalysis } from "./intake";
 import { planRevision } from "./revisions";
 
 const now = () => new Date().toISOString();
@@ -63,7 +63,7 @@ export function getBundle(jobId: string): JobBundle | null {
   if (!job) return null;
   return {
     job,
-    analysis: repo.getLatestAnalysis(jobId),
+    analysis: getBrief(jobId),
     intake: repo.getLatestIntakeAnalysis(jobId),
     workflow: repo.getCurrentWorkflow(jobId),
     generations: repo.listGenerations(jobId),
@@ -76,7 +76,7 @@ export function getBundle(jobId: string): JobBundle | null {
 export function getDashboard() {
   const repo = getRepo();
   const jobs = repo.listJobs();
-  const analyses = new Map(repo.listLatestAnalyses().map((a) => [a.jobId, a]));
+  const analyses = new Map(repo.listLatestIntakeAnalyses().map((a) => [a.jobId, briefView(a)]));
   const workflows = new Map(repo.listCurrentWorkflows().map((w) => [w.jobId, w]));
   const approvals = repo.listApprovals();
   return jobs.map((job) => {
@@ -144,61 +144,56 @@ export async function createJob(input: NewJobInput) {
   };
   repo.insertJob(job);
   log(job.id, "operator", `Brief pasted from ${input.source}. Client price $${input.budget}.`);
-  // Real structured intake analysis (OpenAI Responses / mock) + deterministic decision.
+  // One structured analysis (OpenAI Responses / mock) -> deterministic decision -> priced plan.
   try {
     await runIntakeAnalysis(job);
   } catch (err) {
     log(job.id, "system", `Intake analysis could not be stored: ${(err as Error).message}`);
+    return job.id;
   }
-  await analyzeAndPlan(job.id);
+  replanFromIntake(job.id);
   return job.id;
 }
 
+/** Re-run the analysis on the brief, then rebuild the plan from the new result. */
 export async function analyzeAndPlan(jobId: string) {
   const repo = getRepo();
   const job = repo.getJob(jobId);
   if (!job) throw new GuardrailError("Job not found.");
-  const current = repo.getCurrentWorkflow(jobId);
+  assertNotApproved(jobId);
+  await runIntakeAnalysis(job);
+  replanFromIntake(jobId);
+}
+
+function assertNotApproved(jobId: string) {
+  const current = getRepo().getCurrentWorkflow(jobId);
   if (current && current.approvalStatus === "approved") {
     throw new GuardrailError("This job already has an approved workflow. Re-planning would be a material change — raise a revision instead.");
   }
+}
 
-  const { draft, warning } = await analyzeBrief({
-    rawBrief: job.rawBrief,
-    budget: job.budget,
-    deadline: job.deadline,
-    source: job.source,
-    referenceAssets: job.referenceAssets,
-    clientNotes: job.clientNotes,
-  });
-  if (warning) log(jobId, "system", warning);
+/**
+ * Build the production plan from the job's latest intake analysis (human-edited if present).
+ * The plan is the priced cost plan the decision was made on — same steps, models and attempts —
+ * so what a human approves is what was costed. Refuses once a workflow is approved.
+ */
+export function replanFromIntake(jobId: string) {
+  const repo = getRepo();
+  const job = repo.getJob(jobId);
+  if (!job) throw new GuardrailError("Job not found.");
+  const record = repo.getLatestIntakeAnalysis(jobId);
+  if (!record) throw new GuardrailError("There is no analysis to plan from yet.");
+  assertNotApproved(jobId);
+  const current = repo.getCurrentWorkflow(jobId);
+
+  const analysis = effectiveAnalysis(record);
+  const facts = deriveBriefFacts(analysis);
+  const costPlan = computeCostPlan(analysis, config.economics.maxAttemptsPerStep);
+  const decision = record.decision;
 
   repo.transaction(() => {
-    const analysis: BriefAnalysis = {
-      id: newId("an"),
-      jobId,
-      analyzer: draft.analyzer,
-      summary: draft.summary,
-      deliverables: draft.deliverables,
-      dimensions: draft.dimensions,
-      durations: draft.durations,
-      references: draft.references,
-      exactText: draft.exactText,
-      brandConstraints: draft.brandConstraints,
-      rightsConcerns: draft.rightsConcerns,
-      missingInformation: draft.missingInformation,
-      confidence: draft.confidence,
-      decision: "review",
-      rationale: [],
-      estimatedShots: draft.estimatedShots,
-      createdAt: now(),
-    };
     const version = (current?.version ?? 0) + 1;
-    const workflow = buildWorkflow(analysis, jobId, version, job.contingencyPct);
-    const { decision, rationale } = decide(job, draft, workflow, config.economics);
-    analysis.decision = decision;
-    analysis.rationale = rationale;
-    repo.insertAnalysis(analysis);
+    const workflow = buildWorkflow(costPlan, facts, jobId, version, job.contingencyPct);
 
     if (current) repo.updateWorkflow(current.id, { approvalStatus: "superseded" });
     for (const a of repo.listApprovals(jobId).filter((x) => x.status === "pending" && (x.kind === "initial_workflow" || x.kind === "rights_clearance"))) {
@@ -207,7 +202,9 @@ export async function analyzeAndPlan(jobId: string) {
     workflow.approvalStatus = decision === "reject" ? "draft" : "pending";
     repo.insertWorkflow(workflow);
 
-    log(jobId, "agent", `${draft.analyzer} analysed brief: ${analysis.deliverables.length} deliverables, confidence ${Math.round(analysis.confidence * 100)}%. Recommendation: ${decision}.`);
+    if (costPlan.unpricedCapabilities.length) {
+      log(jobId, "system", `No catalog price for ${costPlan.unpricedCapabilities.join(", ")} — left out of the plan and routed to human review.`);
+    }
     log(jobId, "agent", `Production plan v${version}: ${workflow.steps.length} steps, est. $${workflow.estimatedTotalCost.toFixed(2)}, proposed cap $${workflow.maxBudget}.`);
 
     if (decision === "reject") {
@@ -215,9 +212,9 @@ export async function analyzeAndPlan(jobId: string) {
       log(jobId, "agent", "Moved to Rejected. Reopen to override.");
       return;
     }
-    repo.updateJob(jobId, { status: "needs_review", rightsCleared: analysis.rightsConcerns.length === 0 });
-    if (analysis.rightsConcerns.length) {
-      requestApproval(jobId, "rights_clearance", "Clear rights concerns", analysis.rightsConcerns.join(" "), null, analysis.id);
+    repo.updateJob(jobId, { status: "needs_review", rightsCleared: facts.rightsConcerns.length === 0 });
+    if (facts.rightsConcerns.length) {
+      requestApproval(jobId, "rights_clearance", "Clear rights concerns", facts.rightsConcerns.join(" "), null, record.id);
     }
     requestApproval(
       jobId,
@@ -228,6 +225,22 @@ export async function analyzeAndPlan(jobId: string) {
       workflow.id,
     );
   });
+}
+
+/**
+ * After a human edits and saves the intake analysis: rebuild the plan from the edits, unless the
+ * workflow is already approved (an approved plan only changes through a revision).
+ */
+export function replanAfterReview(jobId: string) {
+  const repo = getRepo();
+  const job = repo.getJob(jobId);
+  const wf = repo.getCurrentWorkflow(jobId);
+  if (!job) return;
+  if (wf?.approvalStatus === "approved") {
+    log(jobId, "system", "Edits saved. The workflow is already approved, so the plan is unchanged — raise a revision to change scope.");
+    return;
+  }
+  replanFromIntake(jobId);
 }
 
 export function updateEconomics(jobId: string, patch: { sourceFeePct?: number; contingencyPct?: number; budget?: number }) {
@@ -265,7 +278,7 @@ export function approveInitialWorkflow(jobId: string, maxBudget: number) {
   const repo = getRepo();
   const job = repo.getJob(jobId);
   const wf = repo.getCurrentWorkflow(jobId);
-  const analysis = repo.getLatestAnalysis(jobId);
+  const analysis = getBrief(jobId);
   if (!job || !wf || !analysis) throw new GuardrailError("Nothing to approve.");
   if (job.status !== "needs_review") throw new GuardrailError(`Job is ${job.status}; only jobs in Needs Review can be approved.`);
   assertRightsCleared(job, analysis.rightsConcerns);
@@ -302,7 +315,7 @@ export async function reopenJob(jobId: string) {
   log(jobId, "operator", "Reopened job for review (override).");
   repo.updateJob(jobId, { status: "needs_review" });
   const wf = repo.getCurrentWorkflow(jobId);
-  const analysis = repo.getLatestAnalysis(jobId);
+  const analysis = getBrief(jobId);
   if (wf && analysis) {
     repo.updateWorkflow(wf.id, { approvalStatus: "pending" });
     repo.updateJob(jobId, { rightsCleared: analysis.rightsConcerns.length === 0 });
@@ -315,7 +328,7 @@ export async function reopenJob(jobId: string) {
 // Production
 // ---------------------------------------------------------------------------
 
-function promptFor(step: WorkflowStep, analysis: BriefAnalysis | null, attempt: number, extra?: string) {
+function promptFor(step: WorkflowStep, analysis: BriefView | null, attempt: number, extra?: string) {
   const parts = [
     step.purpose,
     analysis ? `Brief: ${analysis.summary}` : "",
@@ -416,7 +429,7 @@ export async function tick(jobId: string) {
   const wf = repo.getCurrentWorkflow(jobId);
   if (!wf || wf.approvalStatus !== "approved") return;
   const provider = getProvider();
-  const analysis = repo.getLatestAnalysis(jobId);
+  const analysis = getBrief(jobId);
 
   // 1. poll in-flight work (and enforce the app-level timeout, which is tracked
   //    separately from the provider's status — never reported as a provider status).
@@ -569,7 +582,7 @@ export async function retryStep(jobId: string, stepId: string) {
   const step = wf.steps.find((s) => s.id === stepId);
   if (!step || step.status !== "failed") throw new GuardrailError("Only failed steps can be retried.");
   repo.updateStep(stepId, { status: "running" });
-  const r = await submitGeneration(job, wf, step, repo.listGenerations(jobId).filter((g) => g.stepId === stepId).length + 1, promptFor(step, repo.getLatestAnalysis(jobId), 99, "Operator-requested retry."), null, step.unitCost);
+  const r = await submitGeneration(job, wf, step, repo.listGenerations(jobId).filter((g) => g.stepId === stepId).length + 1, promptFor(step, getBrief(jobId), 99, "Operator-requested retry."), null, step.unitCost);
   if (r === "over_budget") blockForBudget(job, wf, step, step.unitCost);
   if (job.status !== "generating") repo.updateJob(jobId, { status: "generating" });
   log(jobId, "operator", `Retried “${step.name}”.`);
@@ -620,7 +633,7 @@ export async function retryGeneration(jobId: string, generationId: string) {
   const attempt = repo.listGenerations(jobId).filter((x) => x.stepId === step.id).length + 1;
   if (job.status !== "generating") repo.updateJob(jobId, { status: "generating" });
   if (step.status === "failed" || step.status === "blocked") repo.updateStep(step.id, { status: "running" });
-  const r = await submitGeneration(job, wf, step, attempt, promptFor(step, repo.getLatestAnalysis(jobId), attempt, "Operator-requested retry of a prior attempt."), g.revisionId, step.unitCost);
+  const r = await submitGeneration(job, wf, step, attempt, promptFor(step, getBrief(jobId), attempt, "Operator-requested retry of a prior attempt."), g.revisionId, step.unitCost);
   if (r === "over_budget") blockForBudget(job, wf, step, step.unitCost);
   log(jobId, "operator", `Retried take ${g.attempt} as a new attempt on “${step.name}”.`);
 }
@@ -636,7 +649,7 @@ export function addRevision(jobId: string, note: string, deliverable: string | n
   if (!job || !wf) throw new GuardrailError("Job not found.");
   if (job.status !== "qa") throw new GuardrailError("Revision notes are collected while the job is in QA.");
   if (!note.trim()) throw new GuardrailError("Revision note is empty.");
-  const plan = planRevision(note, repo.getLatestAnalysis(jobId), deliverable);
+  const plan = planRevision(note, getBrief(jobId), deliverable);
   const spent = committedSpend(repo.listGenerations(jobId));
   const reservedForApproved = repo
     .listRevisions(jobId)
@@ -707,7 +720,7 @@ export async function runRevision(jobId: string, revisionId: string) {
   }
   const pseudoStep: WorkflowStep = { ...step, modelId: rev.modelId, unitCost: unit, purpose: rev.actionSummary };
   for (let i = 1; i <= rev.attempts; i++) {
-    await submitGeneration(job, wf, pseudoStep, i, promptFor(pseudoStep, repo.getLatestAnalysis(jobId), i, `Client note: ${rev.clientNote}`), rev.id, unit);
+    await submitGeneration(job, wf, pseudoStep, i, promptFor(pseudoStep, getBrief(jobId), i, `Client note: ${rev.clientNote}`), rev.id, unit);
   }
   log(jobId, "agent", `Running revision: ${rev.actionSummary}`);
 }

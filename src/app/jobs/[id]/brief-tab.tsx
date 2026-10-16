@@ -2,12 +2,12 @@ import { FileText, Quote } from "lucide-react";
 import { AnalyzeButton } from "./job-actions";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { BriefAnalysis, Job } from "@/lib/domain/types";
+import type { BriefView, Job } from "@/lib/domain/types";
 import { SOURCE_LABEL } from "@/lib/domain/types";
 import { dateTime, shortDate, usd } from "@/lib/utils";
 import { Dl, ListOrEmpty, Section } from "./section";
 
-export function BriefTab({ job, analysis }: { job: Job; analysis: BriefAnalysis | null }) {
+export function BriefTab({ job, analysis }: { job: Job; analysis: BriefView | null }) {
   return (
     <div className="flex flex-col gap-4">
       {!analysis ? (

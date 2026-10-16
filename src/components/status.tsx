@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import type { ApprovalRequest, Decision, GenerationStatus, JobStatus, StepStatus } from "@/lib/domain/types";
+import type { FinalDecision } from "@/lib/analysis/decision";
+import type { ApprovalRequest, GenerationStatus, JobStatus, StepStatus } from "@/lib/domain/types";
 import { STATUS_LABEL } from "@/lib/domain/types";
 
 const JOB_VARIANT: Record<JobStatus, "outline" | "info" | "warn" | "ok" | "bad" | "secondary"> = {
@@ -16,10 +17,10 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
   return <Badge variant={JOB_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>;
 }
 
-export function DecisionBadge({ decision }: { decision: Decision | null }) {
+export function DecisionBadge({ decision }: { decision: FinalDecision | null }) {
   if (!decision) return <Badge variant="outline">Not analysed</Badge>;
-  const v = decision === "accept" ? "ok" : decision === "review" ? "warn" : "bad";
-  const label = decision === "accept" ? "Accept" : decision === "review" ? "Review" : "Reject";
+  const v = decision === "accept" ? "ok" : decision === "human_review" ? "warn" : "bad";
+  const label = decision === "accept" ? "Accept" : decision === "human_review" ? "Review" : "Reject";
   return <Badge variant={v}>{label}</Badge>;
 }
 
