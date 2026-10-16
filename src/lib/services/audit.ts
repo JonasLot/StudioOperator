@@ -4,15 +4,15 @@ import { getRepo } from "@/lib/repo";
 import { newId } from "./ids";
 
 /** Append one entry to the autonomy audit log. Every consequential agent action flows through here. */
-export function audit(entry: {
+export async function audit(entry: {
   jobId?: string | null;
   kind: AuditKind;
   actor?: AuditEntry["actor"];
   summary: string;
   detail?: string | null;
   costDeltaUsd?: number | null;
-}): void {
-  getRepo().insertAudit({
+}): Promise<void> {
+  await getRepo().insertAudit({
     id: newId("au"),
     jobId: entry.jobId ?? null,
     kind: entry.kind,
@@ -24,6 +24,6 @@ export function audit(entry: {
   });
 }
 
-export function listAudit(jobId?: string): AuditEntry[] {
-  return getRepo().listAudit(jobId);
+export async function listAudit(jobId?: string): Promise<AuditEntry[]> {
+  return await getRepo().listAudit(jobId);
 }

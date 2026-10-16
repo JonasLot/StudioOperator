@@ -13,7 +13,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/mock-output/[id]">) {
   const { id } = await ctx.params;
-  const gen = getRepo().getGeneration(id);
+  const gen = await getRepo().getGeneration(id);
   if (!gen) return new Response("Not found", { status: 404 });
   const model = getModel(gen.model);
   const h = hash(gen.id);

@@ -34,6 +34,13 @@ export const config = {
   },
   databasePath: defaultDatabasePath(),
 
+  // A Postgres connection string (Neon, Supabase, Vercel Postgres, RDS, ...) takes precedence over everything
+  // else: durable, shared across serverless instances, and the recommended store on Vercel. Vercel's Neon
+  // integration injects DATABASE_URL / POSTGRES_URL automatically.
+  postgres: {
+    url: cleanEnv(process.env.DATABASE_URL || process.env.POSTGRES_URL),
+  },
+
   // When a Turso URL is set, the app uses the remote libSQL database (durable and
   // shared across instances) instead of the local SQLite file — needed for jobs to
   // persist on serverless hosts like Vercel. See README "Persisting jobs in production".

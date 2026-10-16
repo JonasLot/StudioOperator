@@ -14,10 +14,12 @@ export function ProductionPoller({ jobId, active, intervalMs = 2000 }: { jobId?:
   React.useEffect(() => {
     if (!active) return;
     let stopped = false;
-    const id = window.setInterval(async () => {
+    const id = window.setInterval(() => {
       if (stopped) return;
-      await (jobId ? tickAction(jobId) : tickAllAction());
-      router.refresh();
+      void (async () => {
+        await (jobId ? tickAction(jobId) : tickAllAction());
+        router.refresh();
+      })();
     }, intervalMs);
     return () => {
       stopped = true;

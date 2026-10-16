@@ -5,13 +5,15 @@ import { ensureSeeded } from "@/lib/seed";
 import { getAutonomy, listClientMemory } from "@/lib/services/agency";
 import { pct, usd } from "@/lib/utils";
 import { AutonomyForm } from "./autonomy-form";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function AutonomyPage() {
+  await loadRuntimeConfig();
   await ensureSeeded();
-  const settings = getAutonomy();
-  const memory = listClientMemory();
+  const settings = await getAutonomy();
+  const memory = await listClientMemory();
 
   return (
     <div className="flex flex-col gap-8">

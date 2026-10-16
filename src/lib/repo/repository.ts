@@ -17,86 +17,87 @@ import type {
 
 /**
  * Persistence boundary. Everything above this interface (services, UI) is storage-agnostic.
- * The local demo uses SQLite (sqlite-repository.ts). A Postgres implementation only needs
- * to satisfy this interface — the schema in schema.sql is written to be portable.
+ * Every method is async so the same code runs on SQLite, libSQL (Turso) and Postgres
+ * (see sql-repository.ts and drivers/).
  */
 export interface StudioRepository {
-  transaction<T>(fn: () => T): T;
+  /** Run `fn` atomically; repository calls made inside it (same async call chain) belong to the transaction. */
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
 
-  listJobs(): Job[];
-  getJob(id: string): Job | null;
-  insertJob(job: Job): void;
-  updateJob(id: string, patch: Partial<Omit<Job, "id" | "createdAt">>): Job;
+  listJobs(): Promise<Job[]>;
+  getJob(id: string): Promise<Job | null>;
+  insertJob(job: Job): Promise<void>;
+  updateJob(id: string, patch: Partial<Omit<Job, "id" | "createdAt">>): Promise<Job>;
 
-  getLatestIntakeAnalysis(jobId: string): IntakeAnalysis | null;
-  listLatestIntakeAnalyses(): IntakeAnalysis[];
-  getIntakeAnalysis(id: string): IntakeAnalysis | null;
-  insertIntakeAnalysis(a: IntakeAnalysis): void;
-  updateIntakeAnalysis(id: string, patch: Partial<Omit<IntakeAnalysis, "id" | "jobId" | "createdAt">>): void;
+  getLatestIntakeAnalysis(jobId: string): Promise<IntakeAnalysis | null>;
+  listLatestIntakeAnalyses(): Promise<IntakeAnalysis[]>;
+  getIntakeAnalysis(id: string): Promise<IntakeAnalysis | null>;
+  insertIntakeAnalysis(a: IntakeAnalysis): Promise<void>;
+  updateIntakeAnalysis(id: string, patch: Partial<Omit<IntakeAnalysis, "id" | "jobId" | "createdAt">>): Promise<void>;
 
-  getCurrentWorkflow(jobId: string): Workflow | null;
-  listCurrentWorkflows(): Workflow[];
-  insertWorkflow(w: Workflow): void; // inserts steps too
-  updateWorkflow(id: string, patch: Partial<Omit<Workflow, "id" | "steps" | "jobId">>): void;
-  updateStep(id: string, patch: Partial<Omit<WorkflowStep, "id" | "workflowId">>): void;
+  getCurrentWorkflow(jobId: string): Promise<Workflow | null>;
+  listCurrentWorkflows(): Promise<Workflow[]>;
+  insertWorkflow(w: Workflow): Promise<void>; // inserts steps too
+  updateWorkflow(id: string, patch: Partial<Omit<Workflow, "id" | "steps" | "jobId">>): Promise<void>;
+  updateStep(id: string, patch: Partial<Omit<WorkflowStep, "id" | "workflowId">>): Promise<void>;
 
-  listGenerations(jobId: string): Generation[];
-  listAllGenerations(): Generation[]; // every job at once, for list screens
-  listActiveGenerations(): Generation[];
-  insertGeneration(g: Generation): void;
-  updateGeneration(id: string, patch: Partial<Omit<Generation, "id" | "jobId">>): Generation;
-  getGeneration(id: string): Generation | null;
+  listGenerations(jobId: string): Promise<Generation[]>;
+  listAllGenerations(): Promise<Generation[]>; // every job at once, for list screens
+  listActiveGenerations(): Promise<Generation[]>;
+  insertGeneration(g: Generation): Promise<void>;
+  updateGeneration(id: string, patch: Partial<Omit<Generation, "id" | "jobId">>): Promise<Generation>;
+  getGeneration(id: string): Promise<Generation | null>;
 
-  listRevisions(jobId: string): Revision[];
-  listAllRevisions(): Revision[]; // every job at once, for list screens
-  getRevision(id: string): Revision | null;
-  insertRevision(r: Revision): void;
-  updateRevision(id: string, patch: Partial<Omit<Revision, "id" | "jobId">>): void;
+  listRevisions(jobId: string): Promise<Revision[]>;
+  listAllRevisions(): Promise<Revision[]>; // every job at once, for list screens
+  getRevision(id: string): Promise<Revision | null>;
+  insertRevision(r: Revision): Promise<void>;
+  updateRevision(id: string, patch: Partial<Omit<Revision, "id" | "jobId">>): Promise<void>;
 
-  listApprovals(jobId?: string): ApprovalRequest[];
-  countPendingApprovals(): number;
-  getApproval(id: string): ApprovalRequest | null;
-  insertApproval(a: ApprovalRequest): void;
-  updateApproval(id: string, patch: Partial<Omit<ApprovalRequest, "id" | "jobId">>): void;
+  listApprovals(jobId?: string): Promise<ApprovalRequest[]>;
+  countPendingApprovals(): Promise<number>;
+  getApproval(id: string): Promise<ApprovalRequest | null>;
+  insertApproval(a: ApprovalRequest): Promise<void>;
+  updateApproval(id: string, patch: Partial<Omit<ApprovalRequest, "id" | "jobId">>): Promise<void>;
 
-  listActivity(jobId: string): ActivityEvent[];
-  insertActivity(e: ActivityEvent): void;
+  listActivity(jobId: string): Promise<ActivityEvent[]>;
+  insertActivity(e: ActivityEvent): Promise<void>;
 
-  insertAsset(a: StoredAsset): void;
-  getAsset(id: string): StoredAsset | null;
+  insertAsset(a: StoredAsset): Promise<void>;
+  getAsset(id: string): Promise<StoredAsset | null>;
 
   // --- supervised autonomy ---
-  getAutonomy(): AutonomySettings | null;
-  upsertAutonomy(s: AutonomySettings): void;
+  getAutonomy(): Promise<AutonomySettings | null>;
+  upsertAutonomy(s: AutonomySettings): Promise<void>;
 
-  listClientMemory(): ClientMemory[];
-  getClientMemory(clientKey: string): ClientMemory | null;
-  upsertClientMemory(m: ClientMemory): void;
+  listClientMemory(): Promise<ClientMemory[]>;
+  getClientMemory(clientKey: string): Promise<ClientMemory | null>;
+  upsertClientMemory(m: ClientMemory): Promise<void>;
 
-  listAgentMessages(jobId?: string): AgentMessage[];
-  getAgentMessage(id: string): AgentMessage | null;
-  insertAgentMessage(m: AgentMessage): void;
-  updateAgentMessage(id: string, patch: Partial<Omit<AgentMessage, "id" | "jobId">>): void;
+  listAgentMessages(jobId?: string): Promise<AgentMessage[]>;
+  getAgentMessage(id: string): Promise<AgentMessage | null>;
+  insertAgentMessage(m: AgentMessage): Promise<void>;
+  updateAgentMessage(id: string, patch: Partial<Omit<AgentMessage, "id" | "jobId">>): Promise<void>;
 
-  listAudit(jobId?: string): AuditEntry[];
-  insertAudit(e: AuditEntry): void;
+  listAudit(jobId?: string): Promise<AuditEntry[]>;
+  insertAudit(e: AuditEntry): Promise<void>;
 
-  listEscalations(jobId?: string): Escalation[];
-  getEscalation(id: string): Escalation | null;
-  insertEscalation(e: Escalation): void;
-  updateEscalation(id: string, patch: Partial<Omit<Escalation, "id" | "jobId">>): void;
+  listEscalations(jobId?: string): Promise<Escalation[]>;
+  getEscalation(id: string): Promise<Escalation | null>;
+  insertEscalation(e: Escalation): Promise<void>;
+  updateEscalation(id: string, patch: Partial<Omit<Escalation, "id" | "jobId">>): Promise<void>;
 
   // --- API keys entered in the UI (values are ciphertext) ---
-  listSecrets(): { name: string; value: string; updatedAt: string }[];
-  upsertSecret(name: string, value: string): void;
-  deleteSecret(name: string): void;
+  listSecrets(): Promise<{ name: string; value: string; updatedAt: string }[]>;
+  upsertSecret(name: string, value: string): Promise<void>;
+  deleteSecret(name: string): Promise<void>;
 
   // --- small key/value settings edited in the UI ---
-  getSetting(key: string): string | null;
-  listSettings(): { key: string; value: string; updatedAt: string }[]; // everything except login throttling rows
-  setSetting(key: string, value: string): void;
-  deleteSetting(key: string): void;
+  getSetting(key: string): Promise<string | null>;
+  listSettings(): Promise<{ key: string; value: string; updatedAt: string }[]>; // everything except login throttling rows
+  setSetting(key: string, value: string): Promise<void>;
+  deleteSetting(key: string): Promise<void>;
 
-  countJobs(): number;
-  wipe(): void;
+  countJobs(): Promise<number>;
+  wipe(): Promise<void>;
 }

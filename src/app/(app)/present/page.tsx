@@ -9,6 +9,7 @@ import { generationSpend } from "@/lib/services/economics";
 import { jobQa } from "@/lib/services/qa";
 import { getBundle, getDashboard, profitabilityFor } from "@/lib/services/studio";
 import { Presenter } from "./presenter";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
@@ -30,29 +31,30 @@ function draftDeliveryNote(job: Job, analysis: BriefView | null, selectedCount: 
 }
 
 export default async function PresentPage(props: PageProps<"/present">) {
+  await loadRuntimeConfig();
   await ensureSeeded();
   const sp = await props.searchParams;
   const cfg = publicConfig();
 
-  const dash = getDashboard();
+  const dash = await getDashboard();
   const demos = dash.map((d) => d.job).filter((j) => DEMO_TITLES.includes(j.title));
   const jobs = (demos.length ? demos : dash.map((d) => d.job)).map((j) => ({ id: j.id, title: j.title }));
   if (jobs.length === 0) notFound();
 
   const selectedId = typeof sp.job === "string" && jobs.some((j) => j.id === sp.job) ? sp.job : jobs[0].id;
-  const bundle = getBundle(selectedId);
+  const bundle = await getBundle(selectedId);
   if (!bundle) notFound();
   const { job, analysis, workflow, generations, approvals } = bundle;
   const p = profitabilityFor(bundle);
-  const qa = jobQa(job.id);
+  const qa = await jobQa(job.id);
 
-  const settings = agency.getAutonomy();
+  const settings = await agency.getAutonomy();
   const template = getTemplate(job.templateId);
-  const memory = agency.getClientMemoryForJob(job);
-  const messages = agency.listMessages(job.id).map((m) => ({ id: m.id, type: m.type, channel: m.channel, subject: m.subject, body: m.body, status: m.status, autoAllowed: m.autoAllowed, heldReason: m.heldReason }));
-  const auditLog = agency.listAudit(job.id).map((a) => ({ kind: a.kind, actor: a.actor, summary: a.summary, detail: a.detail, costDeltaUsd: a.costDeltaUsd }));
-  const escalations = agency.listEscalations(job.id).map((e) => ({ id: e.id, reason: e.reason, title: e.title, detail: e.detail, recommendedAction: e.recommendedAction, status: e.status }));
-  const selfRepairs = agency.planSelfRepairs(job.id).map((r) => ({
+  const memory = await agency.getClientMemoryForJob(job);
+  const messages = (await agency.listMessages(job.id)).map((m) => ({ id: m.id, type: m.type, channel: m.channel, subject: m.subject, body: m.body, status: m.status, autoAllowed: m.autoAllowed, heldReason: m.heldReason }));
+  const auditLog = (await agency.listAudit(job.id)).map((a) => ({ kind: a.kind, actor: a.actor, summary: a.summary, detail: a.detail, costDeltaUsd: a.costDeltaUsd }));
+  const escalations = (await agency.listEscalations(job.id)).map((e) => ({ id: e.id, reason: e.reason, title: e.title, detail: e.detail, recommendedAction: e.recommendedAction, status: e.status }));
+  const selfRepairs = (await agency.planSelfRepairs(job.id)).map((r) => ({
     stepName: r.stepName, modelLabel: r.modelLabel, component: r.decision.smallestFailedComponent,
     action: r.decision.recommendedAction, auto: r.decision.auto, incrementalCostUsd: r.decision.incrementalCostUsd,
     recommendation: r.decision.recommendation, escalationReason: r.decision.escalationReason,

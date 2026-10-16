@@ -6,14 +6,16 @@ import { ProductionPoller } from "@/components/poller";
 import { Button } from "@/components/ui/button";
 import { JOB_STATUSES, type JobStatus } from "@/lib/domain/types";
 import { getDashboard } from "@/lib/services/studio";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function AllJobsPage(props: PageProps<"/jobs">) {
+  await loadRuntimeConfig();
   const sp = await props.searchParams;
   const status = typeof sp.status === "string" && (JOB_STATUSES as readonly string[]).includes(sp.status) ? (sp.status as JobStatus) : null;
   const q = typeof sp.q === "string" ? sp.q : "";
-  const rows = getDashboard();
+  const rows = await getDashboard();
   return (
     <div className="flex flex-col gap-10">
       <ProductionPoller active={rows.some((r) => r.job.status === "generating")} />

@@ -53,27 +53,36 @@ function envValue(name: SecretName): string {
 // while; saving here refreshes immediately, other instances catch up within the TTL.
 const TTL_MS = 15_000;
 // Held on globalThis so every copy of this module (dev reloads, separate bundles) shares one cache.
-type Cache = { at: number; values: Partial<Record<SecretName, string>> } | null;
+type Cache = { at: number; values: Partial<Record<SecretName, string>> } | undefined;
 const g = globalThis as unknown as { __studioSecretCache?: Cache };
 
+/** What is currently cached; a synchronous read, so config getters can use it. See refreshSecrets(). */
 function stored(): Partial<Record<SecretName, string>> {
+  return g.__studioSecretCache?.values ?? {};
+}
+
+/**
+ * Reload the saved keys from the database when the cache is older than the TTL. The database is async,
+ * but `config.openai.apiKey` and friends are synchronous getters, so every entry point (page, server
+ * action) calls this once first (see loadRuntimeConfig); the getters then read the cache.
+ */
+export async function refreshSecrets(): Promise<void> {
   const cache = g.__studioSecretCache;
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.values;
-  const values: Partial<Record<SecretName, string>> = {};
+  if (cache && Date.now() - cache.at < TTL_MS) return;
   const pass = adminPasscode();
+  const values: Partial<Record<SecretName, string>> = {};
   if (pass) {
     try {
-      for (const row of getRepo().listSecrets()) {
+      for (const row of await getRepo().listSecrets()) {
         if (!(row.name in SECRET_DEFS)) continue;
         const plain = decryptSecret(row.value, pass);
         if (plain) values[row.name as SecretName] = plain;
       }
     } catch {
-      /* database not reachable yet — fall back to the environment */
+      return; // database unreachable: keep serving the last good values and retry on the next call
     }
   }
   g.__studioSecretCache = { at: Date.now(), values };
-  return values;
 }
 
 /** The effective value: a key saved in the UI wins over the environment variable. */
@@ -102,7 +111,7 @@ export function secretStatus(): SecretStatus[] {
 export type SaveSecretsResult = { ok: true; saved: SecretName[]; removed: SecretName[] } | { ok: false; error: string };
 
 /** Validate and persist. `updates` holds new values (blank = leave alone); `remove` reverts a key to its environment value. */
-export function saveSecrets(updates: Partial<Record<SecretName, string>>, remove: SecretName[]): SaveSecretsResult {
+export async function saveSecrets(updates: Partial<Record<SecretName, string>>, remove: SecretName[]): Promise<SaveSecretsResult> {
   const pass = adminPasscode();
   if (!pass) return { ok: false, error: "ADMIN_PASSCODE is not configured on the server." };
   const toSave: [SecretName, string][] = [];
@@ -114,15 +123,16 @@ export function saveSecrets(updates: Partial<Record<SecretName, string>>, remove
     toSave.push([name, cleaned.value]);
   }
   const repo = getRepo();
-  repo.transaction(() => {
-    for (const [name, value] of toSave) repo.upsertSecret(name, encryptSecret(value, pass));
-    for (const name of remove) repo.deleteSecret(name);
+  await repo.transaction(async () => {
+    for (const [name, value] of toSave) await repo.upsertSecret(name, encryptSecret(value, pass));
+    for (const name of remove) await repo.deleteSecret(name);
   });
-  g.__studioSecretCache = null;
+  g.__studioSecretCache = undefined;
+  await refreshSecrets();
   return { ok: true, saved: toSave.map(([n]) => n), removed: remove };
 }
 
-/** True when the database is durable across serverless instances (a remote Turso database). */
+/** True when the database is durable across serverless instances (Postgres or a remote Turso database). */
 export function storageIsDurable(): boolean {
-  return !!(process.env.TURSO_DATABASE_URL ?? "").trim();
+  return !!(process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.TURSO_DATABASE_URL ?? "").trim();
 }

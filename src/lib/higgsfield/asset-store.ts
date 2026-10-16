@@ -33,7 +33,7 @@ export async function persistAsset(jobId: string, generationId: string, asset: P
     const buf = Buffer.from(await res.arrayBuffer());
     const mime = (res.headers.get("content-type") || "").split(";")[0].trim() || DEFAULT_MIME[asset.kind];
     const id = newId("as");
-    getRepo().insertAsset({
+    await getRepo().insertAsset({
       id,
       generationId,
       jobId,

@@ -2,10 +2,12 @@ import Link from "next/link";
 import { ArrowLeft, FlaskConical } from "lucide-react";
 import { providerInfo } from "@/lib/services/studio";
 import { ConnectionTestRunner } from "./runner";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
-export default function ConnectionTestPage() {
+export default async function ConnectionTestPage() {
+  await loadRuntimeConfig();
   const p = providerInfo();
   const caps = Object.entries(p.capabilities).filter(([, v]) => v).map(([k]) => k);
 

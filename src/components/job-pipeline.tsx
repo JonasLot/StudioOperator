@@ -6,7 +6,7 @@ import type { getDashboard } from "@/lib/services/studio";
 import { STATUS_META } from "@/lib/status-meta";
 import { cn, daysUntil, pct, shortDate, usd } from "@/lib/utils";
 
-type Row = ReturnType<typeof getDashboard>[number];
+type Row = Awaited<ReturnType<typeof getDashboard>>[number];
 
 const KIND_ICON = { video: Clapperboard, image: ImageIcon, brief: FileText };
 

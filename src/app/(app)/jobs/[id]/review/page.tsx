@@ -10,6 +10,7 @@ import { getBundle } from "@/lib/services/studio";
 import { effectiveAnalysis } from "@/lib/services/intake";
 import { daysUntil, usd } from "@/lib/utils";
 import { ReviewForm } from "./review-form";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +26,10 @@ function Verdict({ decision }: { decision: string }) {
 }
 
 export default async function ReviewPage(props: PageProps<"/jobs/[id]/review">) {
+  await loadRuntimeConfig();
   await ensureSeeded();
   const { id } = await props.params;
-  const bundle = getBundle(id);
+  const bundle = await getBundle(id);
   if (!bundle || !bundle.intake) notFound();
   const { job, intake } = bundle;
   const cfg = publicConfig();
