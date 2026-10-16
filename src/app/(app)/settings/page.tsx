@@ -58,14 +58,18 @@ export default function SettingsPage() {
           <ul className="divide-y">
             <Conn name={`Brief analysis · ${config.openai.model}`} ok={astraLive()} detail={astraKey ? (astraLive() ? "Live" : "Key present · disabled by mock mode") : "No OpenAI API key · offline analyzer in use"} />
             <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No Higgsfield key · simulated provider in use"} />
-            <Conn name={`Database · ${config.databasePath}`} ok detail="SQLite behind the repository layer" />
+            {storageIsDurable() ? (
+              <Conn name="Database · Turso (remote)" ok detail="Durable: jobs, keys, profile and the mock-mode choice survive redeploys and are shared by every server instance." />
+            ) : (
+              <Conn name={`Database · ${config.databasePath}`} ok={false} detail="Temporary local storage. Anything saved here (jobs, keys, profile, mock mode) can disappear on a redeploy or cold start, and each server instance has its own copy. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to make it stick." />
+            )}
           </ul>
           <Link href="/settings/connection-test" className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground hover:bg-accent/80">
             <PlugZap className="size-3.5" /> Run a provider connection test
           </Link>
         </Card>
         <Card title="Mock mode">
-          <MockModeForm current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
+          <MockModeForm durable={storageIsDurable()} current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
         </Card>
         <Card title="API keys">
           <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} durable={storageIsDurable()} />
