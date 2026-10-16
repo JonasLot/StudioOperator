@@ -132,11 +132,16 @@ export async function wireCancel(gen: Generation): Promise<{ status: GenerationS
 
 export async function wireConnectionTest(): Promise<{ ok: boolean; detail: string }> {
   assertEnabled();
-  // Smallest documented authenticated request. Endpoint UNVERIFIED — adjust to the
-  // cheapest GET the docs expose (e.g. an account/models listing).
+  // The API documents no free "who am I" or model-listing call, so probe the status
+  // route with an id that cannot exist: bad credentials come back as 401/403, valid
+  // ones as "not found". Nothing is submitted and nothing is charged.
+  const probe = "00000000-0000-0000-0000-000000000000";
   try {
-    const res = await fetch(`${config.higgsfield.baseUrl}/v1/models`, { headers: authHeaders(), cache: "no-store" });
-    return { ok: res.ok, detail: res.ok ? `Provider responded ${res.status}.` : `Provider responded ${await readError(res)}` };
+    const res = await fetch(`${config.higgsfield.baseUrl}/requests/${probe}/status`, { headers: authHeaders(), cache: "no-store" });
+    if (res.status === 401 || res.status === 403) return { ok: false, detail: `Credentials rejected by the provider (${await readError(res)}).` };
+    if (res.status === 404 || res.status === 400 || res.status === 422) return { ok: true, detail: `Provider reachable and credentials accepted (probe answered ${res.status}).` };
+    if (res.ok) return { ok: true, detail: `Provider responded ${res.status}.` };
+    return { ok: false, detail: `Provider responded ${await readError(res)}` };
   } catch (err) {
     return { ok: false, detail: scrubSecrets((err as Error).message) };
   }
