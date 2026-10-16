@@ -400,7 +400,11 @@ export class SqliteStudioRepository implements StudioRepository {
     return row?.value ?? null;
   }
   listSettings() {
-    return this.db.prepare("SELECT key, value FROM app_settings WHERE key NOT LIKE 'login:%'").all() as { key: string; value: string }[];
+    return (this.db.prepare("SELECT key, value, updated_at FROM app_settings WHERE key NOT LIKE 'login:%'").all() as { key: string; value: string; updated_at: string }[]).map((r) => ({
+      key: r.key,
+      value: r.value,
+      updatedAt: r.updated_at,
+    }));
   }
   setSetting(key: string, value: string) {
     this.db
