@@ -243,3 +243,11 @@ CREATE TABLE IF NOT EXISTS app_secrets (
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- Small key/value store for settings edited in the UI (profile, mock-mode override,
+-- login throttling). Not secret; not wiped by "reset demo data".
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

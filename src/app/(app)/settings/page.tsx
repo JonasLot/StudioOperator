@@ -4,10 +4,12 @@ import { CheckCircle2, CircleSlash, FlaskConical, PlugZap, RotateCcw, Store } fr
 import { resetDemoAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { ApiKeysForm } from "./api-keys-form";
+import { MockModeForm } from "./mock-mode-form";
 import { Button } from "@/components/ui/button";
 import { astraLive, config, higgsfieldLive } from "@/lib/config";
 import { SOURCE_LABEL, type JobSource } from "@/lib/domain/types";
 import { adminPasscode, secretStatus, storageIsDurable } from "@/lib/secrets";
+import { mockSetting } from "@/lib/settings";
 import { MANUAL_MARKETPLACE_STEPS } from "@/lib/services/marketplace-policy";
 import { pct } from "@/lib/utils";
 
@@ -61,6 +63,9 @@ export default function SettingsPage() {
           <Link href="/settings/connection-test" className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground hover:bg-accent/80">
             <PlugZap className="size-3.5" /> Run a provider connection test
           </Link>
+        </Card>
+        <Card title="Mock mode">
+          <MockModeForm current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
         </Card>
         <Card title="API keys">
           <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} durable={storageIsDurable()} />

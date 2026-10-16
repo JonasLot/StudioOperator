@@ -88,6 +88,11 @@ export interface StudioRepository {
   upsertSecret(name: string, value: string): void;
   deleteSecret(name: string): void;
 
+  // --- small key/value settings edited in the UI ---
+  getSetting(key: string): string | null;
+  setSetting(key: string, value: string): void;
+  deleteSetting(key: string): void;
+
   countJobs(): number;
   wipe(): void;
 }

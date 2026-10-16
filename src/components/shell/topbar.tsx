@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, FlaskConical, Lock, Zap } from "lucide-react";
+import { ChevronRight, FlaskConical, LogOut, UserRound, Zap } from "lucide-react";
+import { logoutAction } from "@/app/actions";
 
 function crumb(pathname: string) {
   if (pathname === "/") return "Overview";
@@ -13,10 +14,11 @@ function crumb(pathname: string) {
   if (pathname.startsWith("/outputs")) return "Outputs";
   if (pathname.startsWith("/models")) return "Model router";
   if (pathname.startsWith("/settings")) return "Autonomy & connections";
+  if (pathname.startsWith("/profile")) return "Profile";
   return "";
 }
 
-export function Topbar({ mockMode, live }: { mockMode: boolean; live: string }) {
+export function Topbar({ mockMode, live, displayName, loginOn }: { mockMode: boolean; live: string; displayName: string; loginOn: boolean }) {
   const pathname = usePathname();
   return (
     <div className="flex h-14 items-center justify-between gap-3 border-b bg-card/60 px-6 backdrop-blur lg:px-10">
@@ -32,9 +34,16 @@ export function Topbar({ mockMode, live }: { mockMode: boolean; live: string }) 
           {mockMode ? <FlaskConical className="size-3.5" /> : <Zap className="size-3.5 text-ok" />}
           {mockMode ? "Mock mode" : live}
         </Link>
-        <span className="hidden items-center gap-1.5 md:inline-flex">
-          <Lock className="size-3.5" /> Private studio workspace
-        </span>
+        <Link href="/profile" className="inline-flex items-center gap-1.5 hover:text-foreground" title="Your profile">
+          <UserRound className="size-3.5" /> <span className="max-w-[10rem] truncate">{displayName}</span>
+        </Link>
+        {loginOn ? (
+          <form action={logoutAction}>
+            <button type="submit" className="inline-flex items-center gap-1.5 hover:text-foreground" title="Sign out">
+              <LogOut className="size-3.5" /> <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </form>
+        ) : null}
       </div>
     </div>
   );
