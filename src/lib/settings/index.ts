@@ -10,25 +10,28 @@ import { parseMockSetting, resolveMockForced, resolveMockMode, type MockSetting,
 // ---------------------------------------------------------------------------
 
 const TTL_MS = 5_000;
-type Snapshot = { at: number; values: Map<string, string> };
+type Entry = { value: string; updatedAt: string };
+type Snapshot = { at: number; values: Map<string, Entry> };
 const g = globalThis as unknown as { __studioSettings?: Snapshot };
 
 // One query loads every setting, so a page that reads the profile, the mock-mode override and
 // more costs a single round trip per TTL instead of one per key.
-function snapshot(): Map<string, string> {
+function snapshot(): Map<string, Entry> {
   const hit = g.__studioSettings;
   if (hit && Date.now() - hit.at < TTL_MS) return hit.values;
-  const values = new Map<string, string>();
   try {
-    for (const row of getRepo().listSettings()) values.set(row.key, row.value);
+    const values = new Map<string, Entry>();
+    for (const row of getRepo().listSettings()) values.set(row.key, { value: row.value, updatedAt: row.updatedAt });
+    g.__studioSettings = { at: Date.now(), values };
+    return values;
   } catch {
-    /* database not reachable yet — behave as if nothing is set */
+    // A failed read must not look like "nothing is set": that would flip a saved Live choice back to mock.
+    // Keep serving the last good values (or none yet) and try again on the next call instead of caching the failure.
+    return hit?.values ?? new Map();
   }
-  g.__studioSettings = { at: Date.now(), values };
-  return values;
 }
 
-const read = (key: string): string | null => snapshot().get(key) ?? null;
+const read = (key: string): string | null => snapshot().get(key)?.value ?? null;
 
 function write(key: string, value: string | null) {
   const repo = getRepo();
@@ -36,7 +39,7 @@ function write(key: string, value: string | null) {
   else repo.setSetting(key, value);
   const values = new Map(snapshot());
   if (value === null) values.delete(key);
-  else values.set(key, value);
+  else values.set(key, { value, updatedAt: new Date().toISOString() });
   g.__studioSettings = { at: Date.now(), values };
 }
 
@@ -48,6 +51,8 @@ export function mockSetting(): MockSetting | null {
 export function setMockSetting(value: MockSetting | null) {
   write("mockMode", value);
 }
+/** When the mock-mode choice was stored in the database, or null when nothing is stored. */
+export const mockSettingSavedAt = (): string | null => snapshot().get("mockMode")?.updatedAt ?? null;
 export const isMockMode = () => resolveMockMode(mockSetting(), process.env.STUDIO_MOCK_MODE);
 export const isMockForced = () => resolveMockForced(mockSetting(), process.env.STUDIO_MOCK_MODE);
 

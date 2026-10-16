@@ -93,7 +93,7 @@ export interface StudioRepository {
 
   // --- small key/value settings edited in the UI ---
   getSetting(key: string): string | null;
-  listSettings(): { key: string; value: string }[]; // everything except login throttling rows
+  listSettings(): { key: string; value: string; updatedAt: string }[]; // everything except login throttling rows
   setSetting(key: string, value: string): void;
   deleteSetting(key: string): void;
 

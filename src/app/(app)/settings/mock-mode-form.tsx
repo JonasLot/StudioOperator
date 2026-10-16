@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 
 type Choice = "mock" | "live" | "default";
 
-export function MockModeForm({ current, mockMode, passcodeConfigured, envLabel, durable }: { current: "mock" | "live" | null; mockMode: boolean; passcodeConfigured: boolean; envLabel: string; durable: boolean }) {
+export function MockModeForm({ current, mockMode, passcodeConfigured, envLabel, durable, savedAt }: { current: "mock" | "live" | null; mockMode: boolean; passcodeConfigured: boolean; envLabel: string; durable: boolean; savedAt: string | null }) {
   const [state, action, pending] = React.useActionState<MockModeState, FormData>(setMockModeAction, undefined);
   const [choice, setChoice] = React.useState<Choice>(current ?? "default");
   const needsPasscode = choice !== "mock";
@@ -38,6 +38,9 @@ export function MockModeForm({ current, mockMode, passcodeConfigured, envLabel, 
         {mockMode ? <FlaskConical className="size-4" /> : <Zap className="size-4 text-ok" />}
         {mockMode ? "Right now: mock mode — no external calls are made." : "Right now: live mode."}
         <span className="ml-auto text-[12px] text-muted-foreground">{current ? "Set here" : "From environment"}</span>
+      </p>
+      <p className="-mt-2 text-[12px] text-muted-foreground">
+        {current && savedAt ? `Stored in the database: ${current}, saved ${savedAt}.` : "Nothing stored in the database — following the server environment."}
       </p>
       <fieldset className="flex flex-col gap-2">
         <legend className="sr-only">Mode</legend>

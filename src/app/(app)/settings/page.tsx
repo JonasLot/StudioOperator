@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { astraLive, config, higgsfieldLive } from "@/lib/config";
 import { SOURCE_LABEL, type JobSource } from "@/lib/domain/types";
 import { adminPasscode, secretStatus, storageIsDurable } from "@/lib/secrets";
-import { mockSetting } from "@/lib/settings";
+import { mockSetting, mockSettingSavedAt } from "@/lib/settings";
 import { MANUAL_MARKETPLACE_STEPS } from "@/lib/services/marketplace-policy";
 import { pct } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export default function SettingsPage() {
           </Link>
         </Card>
         <Card title="Mock mode">
-          <MockModeForm durable={storageIsDurable()} current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
+          <MockModeForm savedAt={(() => { const t = mockSettingSavedAt(); return t ? `${new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC` : null; })()} durable={storageIsDurable()} current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
         </Card>
         <Card title="API keys">
           <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} durable={storageIsDurable()} />
