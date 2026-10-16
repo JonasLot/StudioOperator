@@ -47,14 +47,6 @@ export const config = {
     model: process.env.OPENAI_MODEL || process.env.ASTRA_MODEL || "gpt-6-astra",
   },
 
-  // Legacy chat-completions analyzer config (still used by the workflow planner
-  // path). Kept for backward compatibility; the real analysis uses `openai`.
-  astra: {
-    apiKey: process.env.ASTRA_API_KEY || "",
-    baseUrl: (process.env.ASTRA_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
-    model: process.env.ASTRA_MODEL || "gpt-6-astra",
-  },
-
   // Higgsfield generation provider. Credentials are read here, server-side only,
   // and must never be logged, serialised to the client, or put in error messages
   // (see scrubSecrets). HF_API_KEY_ID / HF_API_KEY_SECRET are the primary names;
@@ -137,8 +129,9 @@ export function openaiLive() {
   return config.openai.apiKey.length > 0 && process.env.STUDIO_MOCK_MODE !== "true";
 }
 
+/** Whether brief analysis is live (UI label). Same switch as openaiLive: there is one analyzer. */
 export function astraLive() {
-  return !config.mockMode && config.astra.apiKey.length > 0;
+  return openaiLive();
 }
 
 export function higgsfieldLive() {
@@ -150,7 +143,7 @@ export function higgsfieldLive() {
 // credentials must never appear anywhere outside the server-side fetch itself.
 export function scrubSecrets(input: string): string {
   let out = input;
-  for (const secret of [config.higgsfield.apiKeySecret, config.higgsfield.apiKeyId, config.openai.apiKey, config.astra.apiKey, config.turso.authToken]) {
+  for (const secret of [config.higgsfield.apiKeySecret, config.higgsfield.apiKeyId, config.openai.apiKey, config.turso.authToken]) {
     if (secret && secret.length >= 6) out = out.split(secret).join("«redacted»");
   }
   return out;

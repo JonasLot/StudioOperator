@@ -35,7 +35,7 @@ function Conn({ name, ok, detail }: { name: string; ok: boolean; detail: string 
 export default function SettingsPage() {
   const e = config.economics;
   // Only booleans about key presence are rendered — never key values.
-  const astraKey = config.astra.apiKey.length > 0;
+  const astraKey = config.openai.apiKey.length > 0;
   const hfKey = config.higgsfield.apiKeyId.length > 0 && config.higgsfield.apiKeySecret.length > 0;
   return (
     <div className="flex flex-col gap-8">
@@ -52,7 +52,7 @@ export default function SettingsPage() {
             </p>
           ) : null}
           <ul className="divide-y">
-            <Conn name={`Brief analysis · ${config.astra.model}`} ok={astraLive()} detail={astraKey ? (config.mockMode ? "Key present · disabled by mock mode" : "Live") : "No ASTRA_API_KEY · offline analyzer in use"} />
+            <Conn name={`Brief analysis · ${config.openai.model}`} ok={astraLive()} detail={astraKey ? (astraLive() ? "Live" : "Key present · disabled by mock mode") : "No OPENAI_API_KEY · offline analyzer in use"} />
             <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No HF_API_KEY_ID / HF_API_KEY_SECRET · simulated provider in use"} />
             <Conn name={`Database · ${config.databasePath}`} ok detail="SQLite behind the repository layer" />
           </ul>

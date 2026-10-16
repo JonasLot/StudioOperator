@@ -2,7 +2,7 @@ import { CircleHelp, ShieldAlert } from "lucide-react";
 import { DecisionBadge } from "@/components/status";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import type { BriefAnalysis, Job, Workflow } from "@/lib/domain/types";
+import type { BriefView, Job, Workflow } from "@/lib/domain/types";
 import type { Profitability } from "@/lib/services/economics";
 import { cn, pct } from "@/lib/utils";
 import { AnalyzeButton, RejectButton, ReopenButton } from "./job-actions";
@@ -10,11 +10,11 @@ import { ListOrEmpty, Section } from "./section";
 
 const VERDICT: Record<string, string> = {
   accept: "Take it. The brief is clear, feasible and profitable inside the plan.",
-  review: "Worth doing, but something needs your judgement first.",
+  human_review: "Worth doing, but something needs your judgement first.",
   reject: "Don’t take this on as briefed.",
 };
 
-export function DecisionTab({ job, analysis, workflow, profitability }: { job: Job; analysis: BriefAnalysis | null; workflow: Workflow | null; profitability: Profitability }) {
+export function DecisionTab({ job, analysis, workflow, profitability }: { job: Job; analysis: BriefView | null; workflow: Workflow | null; profitability: Profitability }) {
   if (!analysis) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed bg-card px-4 py-6">

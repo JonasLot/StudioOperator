@@ -50,7 +50,7 @@ function detectDeliverables(text: string, exactText: string[]): { deliverables: 
   const heroAspect = aspects.find((a) => a !== cutdownAspect) ?? aspects[0] ?? null;
 
   const deliverables: AnalysisDeliverable[] = [];
-  const wantsVideo = /\b(film|video|spot|commercial|reel|ad|trailer|teaser|cutdown|clip|animation|motion)\b/i.test(text);
+  const wantsVideo = /\b(film|video|spot|commercial|reel|ad|trailer|teaser|cutdown|clip|animation|motion|sequence|orbit\w*|footage|cinematic)\b/i.test(text);
   const durText = (d: number) => (d >= 60 && d % 60 === 0 ? `${d / 60} min` : `${d}s`);
   let heroShots = 0;
 
@@ -65,19 +65,23 @@ function detectDeliverables(text: string, exactText: string[]): { deliverables: 
       exactTextRequirements: exactText,
     });
     heroShots = Math.ceil(main / 4);
+    const countWords: Record<string, number> = { two: 2, three: 3, four: 4 };
     for (const d of rest.slice(0, 3)) {
-      deliverables.push({ name: `${durText(d)} cutdown`, format: "video", aspectRatio: cutdownAspect ?? heroAspect, duration: durText(d), resolution: res, exactTextRequirements: [] });
+      // "two 15s cutdowns" -> 2; the count leads the name so it survives into the structured analysis.
+      const m = text.match(new RegExp(`\\b(\\d|two|three|four)\\s*(?:x\\s*)?${d}\\s*[- ]?s(?:ec\\w*)?\\b`, "i"));
+      const qty = m ? Number(m[1]) || countWords[m[1].toLowerCase()] || 1 : 1;
+      deliverables.push({ name: qty > 1 ? `${qty} × ${durText(d)} cutdowns` : `${durText(d)} cutdown`, format: "video", aspectRatio: cutdownAspect ?? heroAspect, duration: durText(d), resolution: res, exactTextRequirements: [] });
     }
   } else if (wantsVideo) {
     deliverables.push({ name: "Short video (duration TBC)", format: "video", aspectRatio: heroAspect, duration: null, resolution: res, exactTextRequirements: exactText });
     heroShots = 4;
   }
 
-  const stillMatch = text.match(/(\d{1,2}|one|two|three|four|five|six|eight|ten|twelve)\s+(?:[\w-]+\s+){0,2}(stills|key ?visuals|images|posters|thumbnails|banners|frames)\b/i);
+  const stillMatch = text.match(/\b(\d{1,2}|a|single|one|two|three|four|five|six|eight|ten|twelve)\s+(?:[\w-]+\s+){0,2}(stills?|key ?visuals?|key ?frames?|images?|posters?|thumbnails?|banners?)\b/i);
   if (stillMatch) {
-    const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, eight: 8, ten: 10, twelve: 12 };
+    const words: Record<string, number> = { a: 1, single: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, eight: 8, ten: 10, twelve: 12 };
     const qty = Number(stillMatch[1]) || words[stillMatch[1].toLowerCase()] || 1;
-    deliverables.push({ name: `${qty} × ${stillMatch[2].toLowerCase()}`, format: "still image", aspectRatio: aspects.find((a) => a === "4:5" || a === "1:1") ?? heroAspect, duration: null, resolution: res, exactTextRequirements: [] });
+    deliverables.push({ name: qty > 1 ? `${qty} × ${stillMatch[2].toLowerCase().replace(/s?$/, "s")}` : `1 × ${stillMatch[2].toLowerCase().replace(/s$/, "")}`, format: "still image", aspectRatio: aspects.find((a) => a === "4:5" || a === "1:1") ?? heroAspect, duration: null, resolution: res, exactTextRequirements: [] });
   }
 
   if (/\b(voice[- ]?over|voiceover|\bvo\b|narrat\w+)\b/i.test(text) && !/\bno (voice[- ]?over|vo|narration)\b/i.test(text)) {

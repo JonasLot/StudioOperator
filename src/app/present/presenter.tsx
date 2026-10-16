@@ -149,7 +149,7 @@ export function Presenter({ data }: { data: PresenterData }) {
           <h2 className="mb-2 text-[18px] font-semibold">Analysis <span className="ml-2 text-[12px] font-normal text-muted-foreground">by {d.job.analyzer}</span></h2>
           <p className="text-[14px]">{d.analysis.summary}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
-            <span className="rounded-md bg-muted px-2 py-1">decision: <strong>{d.analysis.decision}</strong></span>
+            <span className="rounded-md bg-muted px-2 py-1">decision: <strong>{d.analysis.decision.replace("_", " ")}</strong></span>
             <span className="rounded-md bg-muted px-2 py-1 tnum">confidence {pct(d.analysis.confidence)}</span>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">

@@ -1,9 +1,10 @@
 import "server-only";
 import { config } from "@/lib/config";
-import type { BriefAnalysis, Deliverable, Generation, Job, WorkflowStep } from "@/lib/domain/types";
+import type { BriefView, Deliverable, Generation, Job, WorkflowStep } from "@/lib/domain/types";
 import { getModel } from "@/lib/higgsfield/catalog";
 import { assessOutput, primaryIssue, type PerceptualKind, type QaInput, type QaReport, type QaVerdict } from "@/lib/qa/qa";
 import { decideRepair, type RepairDecision } from "@/lib/qa/repair";
+import { getBrief } from "./intake";
 import { getRepo } from "@/lib/repo";
 import { computeProfitability, generationSpend } from "./economics";
 
@@ -75,7 +76,7 @@ function perceptualFor(type: "video" | "image" | "audio", brief: string): Percep
   return ks;
 }
 
-function buildInput(job: Job, analysis: BriefAnalysis, gen: Generation, deliverable: Deliverable | null, step: WorkflowStep): QaInput {
+function buildInput(job: Job, analysis: BriefView, gen: Generation, deliverable: Deliverable | null, step: WorkflowStep): QaInput {
   const type = stepOutputType(step, deliverable, gen.outputType ?? "image");
   const briefText = `${analysis.summary}\n${job.rawBrief}`;
   const prohibited = clausesMatching(briefText, /\b(no|never|avoid|do not|don'?t|without)\b/i, 4);
@@ -104,7 +105,7 @@ function buildInput(job: Job, analysis: BriefAnalysis, gen: Generation, delivera
 export function jobQa(jobId: string): JobQa {
   const repo = getRepo();
   const job = repo.getJob(jobId);
-  const analysis = repo.getLatestAnalysis(jobId);
+  const analysis = getBrief(jobId);
   const workflow = repo.getCurrentWorkflow(jobId);
   const generations = repo.listGenerations(jobId);
   const limits = { perRepairMaxUsd: config.qa.perRepairMaxUsd, perJobRepairMaxUsd: config.qa.perJobRepairMaxUsd, maxAutoRepairsPerJob: config.qa.maxAutoRepairsPerJob };

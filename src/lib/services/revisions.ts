@@ -1,4 +1,4 @@
-import type { BriefAnalysis, RevisionAction } from "@/lib/domain/types";
+import type { BriefView, RevisionAction } from "@/lib/domain/types";
 import { getModel } from "@/lib/higgsfield/catalog";
 
 export interface RevisionPlan {
@@ -20,7 +20,7 @@ const RULES: { re: RegExp; action: RevisionAction; model: string | null; attempt
   { re: /\b(shot|scene|replace|camera|angle|character|face|hands?|product|background|wardrobe|look)\b/i, action: "regenerate_shot", model: "kling-o3-image-ref", attempts: 4, summary: "Regenerate the affected shot from an adjusted keyframe and drop it into the edit." },
 ];
 
-export function planRevision(note: string, analysis: BriefAnalysis | null, deliverableHint: string | null): RevisionPlan {
+export function planRevision(note: string, analysis: BriefView | null, deliverableHint: string | null): RevisionPlan {
   const rule = RULES.find((r) => r.re.test(note));
   const deliverable =
     deliverableHint ||

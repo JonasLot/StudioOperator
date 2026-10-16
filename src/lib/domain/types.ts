@@ -3,6 +3,7 @@
 
 import type { Analysis } from "@/lib/analysis/schema";
 import type { FinalDecision } from "@/lib/analysis/decision";
+import type { BriefFacts } from "@/lib/analysis/view";
 
 export const JOB_SOURCES = ["upwork", "fiverr", "contra", "email", "direct"] as const;
 export type JobSource = (typeof JOB_SOURCES)[number];
@@ -18,7 +19,6 @@ export const JOB_STATUSES = [
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
-export type Decision = "accept" | "review" | "reject";
 export type ApprovalStatus = "draft" | "pending" | "approved" | "rejected" | "superseded";
 
 export interface Job {
@@ -53,23 +53,17 @@ export interface Deliverable {
   resolution: string | null;
 }
 
-export interface BriefAnalysis {
-  id: string;
+/**
+ * What screens, QA and revision planning read about a brief. Derived on read from the
+ * latest IntakeAnalysis (human-edited if present, else the model's), never stored:
+ * the structured Analysis is the single source of truth.
+ */
+export interface BriefView extends BriefFacts {
+  id: string; // the IntakeAnalysis id it was derived from
   jobId: string;
-  analyzer: string; // "gpt-6-astra" | "mock-astra"
-  summary: string;
-  deliverables: Deliverable[];
-  dimensions: string[];
-  durations: string[];
-  references: string[];
-  exactText: string[];
-  brandConstraints: string[];
-  rightsConcerns: string[];
-  missingInformation: string[];
-  confidence: number; // 0..1
-  decision: Decision;
+  analyzer: string; // "gpt-6-astra" | "mock-astra" | "mock-astra (fallback)"
+  decision: FinalDecision; // the application's deterministic decision
   rationale: string[];
-  estimatedShots: number;
   createdAt: string;
 }
 
@@ -345,7 +339,7 @@ export interface ClientMemory {
 
 export interface JobBundle {
   job: Job;
-  analysis: BriefAnalysis | null;
+  analysis: BriefView | null;
   intake: IntakeAnalysis | null;
   workflow: Workflow | null;
   generations: Generation[];

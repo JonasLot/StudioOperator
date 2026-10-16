@@ -27,6 +27,7 @@ import { audit, listAudit } from "./audit";
 export { listAudit };
 import { computeProfitability, generationSpend } from "./economics";
 import { newId } from "./ids";
+import { getBrief } from "./intake";
 import { jobQa } from "./qa";
 import * as studio from "./studio";
 
@@ -161,7 +162,7 @@ export function approveAndSendMessage(messageId: string): AgentMessage {
 export function runIntakeConversation(jobId: string): void {
   const repo = getRepo();
   const job = repo.getJob(jobId);
-  const analysis = repo.getLatestAnalysis(jobId);
+  const analysis = getBrief(jobId);
   if (!job || !analysis) return;
   const questions = agent.missingQuestions(analysis);
   const assets = agent.assetRequests(analysis);
@@ -208,7 +209,7 @@ export function presentConcept(jobId: string, opts: { changed: string; decisionN
 export function sendProposal(jobId: string): AgentMessage {
   const repo = getRepo();
   const job = repo.getJob(jobId)!;
-  const analysis = repo.getLatestAnalysis(jobId)!;
+  const analysis = getBrief(jobId)!;
   const workflow = repo.getCurrentWorkflow(jobId);
   const template = getTemplate(job.templateId);
   const p = computeProfitability(job, workflow, repo.listGenerations(jobId), repo.listRevisions(jobId));
@@ -245,7 +246,7 @@ export function sendChangeOrder(jobId: string, opts: { note: string; addedPriceU
 export function draftDelivery(jobId: string): AgentMessage {
   const repo = getRepo();
   const job = repo.getJob(jobId)!;
-  const analysis = repo.getLatestAnalysis(jobId);
+  const analysis = getBrief(jobId);
   const template = getTemplate(job.templateId);
   const selected = repo.listGenerations(jobId).filter((g) => g.selected && g.status === "completed");
   const pkg = agent.deliveryPackage({
@@ -295,7 +296,7 @@ export function resolveEscalation(id: string): void {
 export function evaluatePauses(jobId: string): PauseCondition[] {
   const repo = getRepo();
   const job = repo.getJob(jobId);
-  const analysis = repo.getLatestAnalysis(jobId);
+  const analysis = getBrief(jobId);
   const workflow = repo.getCurrentWorkflow(jobId);
   if (!job || !analysis) return [];
   const settings = getAutonomy();

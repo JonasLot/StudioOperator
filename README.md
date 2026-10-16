@@ -63,10 +63,18 @@ human_review / reject** call (`src/lib/analysis/decision.ts`) from catalog price
 fees, contingency, the approved attempt limits and the configured production budget. If a step
 has no catalogue price, the job is routed to human review rather than guessing.
 
-Open **Review analysis** on a job to edit any extracted field and approve or reject it. Both the
-original analysis and the human-edited version are stored for comparison. Tests for the schema,
-malformed responses, missing fields and the deterministic decision rules live beside the code
-(`src/lib/analysis/*.test.ts`); run them with `npm test`.
+That one analysis is the single source of truth for a brief. The production plan is built
+directly from the priced cost plan (`src/lib/analysis/plan.ts`) — the same steps, catalogued models
+and attempts the decision was made on — and the flatter shape the screens, QA and revision
+planning read (numbered deliverables, merged dimensions / text / rights) is derived on read
+(`src/lib/analysis/view.ts`), never stored.
+
+Open **Review analysis** on a job to edit any extracted field and approve or reject it. Saving an
+edit re-runs the deterministic decision and rebuilds the plan from the edited analysis (until a
+workflow is approved; after that, scope only changes through a revision). Both the original
+analysis and the human-edited version are stored for comparison. Tests for the schema, malformed
+responses, missing fields, the deterministic decision rules, the derived view and the plan live
+beside the code (`src/lib/analysis/*.test.ts`); run them with `npm test`.
 
 ## Model router (transparent)
 
@@ -95,7 +103,7 @@ spend; after approval the agent operates only inside those limits.
 1. **Intake** — New Job: paste the brief, client price, deadline, source, channel fee, reference assets.
 2. **Analysis** — GPT-6 Astra (or the offline analyzer in mock mode) extracts deliverables, dimensions, durations, references, verbatim text, brand constraints, rights concerns and missing information.
 3. **Decision** — the model's suggestion is combined with deterministic rules: margin floor/target, deadline feasibility, rights, confidence, and hard stops (e.g. deceptive real-person content).
-4. **Plan & cost** — ordered steps on image, video, voice, editing and finishing models, with attempts × unit cost, a proposed cap (estimate + contingency) and expected gross margin.
+4. **Plan & cost** — the priced steps from the analysis, on image, video, voice, editing and finishing models, with attempts × unit cost, a proposed cap (estimate + contingency) and expected gross margin.
 5. **Human approval** — rights clearance (if flagged) and the workflow + maximum generation budget.
 6. **Production** — the agent runs steps in order only while committed spend + next estimate fits under the cap; otherwise it pauses and requests a budget increase.
 7. **QA & revisions** — select takes, log client notes. Notes that fit the remaining cap are auto-approved; scope changes and overruns wait for you. Final delivery always needs approval.
@@ -159,7 +167,7 @@ All checks run server-side; the UI only reflects them.
 - **Persistence**: `StudioRepository` interface (`src/lib/repo/repository.ts`) with a SQLite implementation (`better-sqlite3`). `schema.sql` is portable; implement the interface for Postgres and swap it in `src/lib/repo/index.ts`.
 - **Secrets**: read only in `src/lib/config.ts` (`server-only`). The browser receives a `publicConfig()` without keys.
 - **Providers**:
-  - `src/lib/ai/brief-analyzer.ts` — Astra via OpenAI-compatible chat completions with JSON-schema output, validated with zod; falls back to the offline analyzer and logs a warning if the call fails.
+  - `src/lib/analysis/astra.ts` — Astra via the OpenAI Responses API with Structured Outputs, validated with zod; falls back to the offline analyzer (`mock.ts`) and logs a warning if the call fails.
   - `src/lib/higgsfield/provider.ts` — live adapter following docs.higgsfield.ai (`POST /{model endpoint}`, `Authorization: Key id:secret`, `Idempotency-Key`, poll `status_url`; statuses `queued | in_progress | completed | failed | nsfw | canceled`) and a deterministic mock provider.
 - **Production loop**: `tick()` polls in-flight requests, settles steps, submits the next step within the cap, and moves the job to QA. In the demo the open tab drives it every 2s; in deployment, call `tickAllGenerating()` from a worker or a Higgsfield webhook.
 
@@ -167,5 +175,5 @@ All checks run server-side; the UI only reflects them.
 
 - `src/lib/higgsfield/catalog.ts`: only the Kling O3 image-reference endpoint is verified against Higgsfield docs. Confirm the other endpoint paths in the API console, and replace the placeholder **unit costs** with your real credit pricing — margins are only as good as these numbers.
 - Higgsfield's status payload doesn't report spend, so live "actual cost" stays empty until you reconcile; guardrails use the estimate meanwhile.
-- `ASTRA_MODEL` / `ASTRA_BASE_URL` assume an OpenAI-compatible endpoint; adjust if Astra's API differs.
+- `OPENAI_MODEL` / `OPENAI_BASE_URL` (or the `ASTRA_*` fallbacks) assume the OpenAI Responses API; adjust if Astra's API differs.
 - Gross margin here is generation economics only (price − fee − spend − contingency). Your own time is not costed.

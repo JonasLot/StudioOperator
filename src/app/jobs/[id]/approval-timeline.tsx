@@ -34,7 +34,7 @@ export function ApprovalTimeline({ bundle, p }: { bundle: JobBundle; p: Profitab
       title: "Analysis, decision & plan",
       who: "agent",
       state: analysis ? "done" : "current",
-      detail: analysis ? `${analysis.decision} · est. ${usd(workflow?.estimatedTotalCost, { cents: true })}` : "Not run yet",
+      detail: analysis ? `${analysis.decision.replace("_", " ")} · est. ${usd(workflow?.estimatedTotalCost, { cents: true })}` : "Not run yet",
     },
   ];
   if (analysis?.rightsConcerns.length) {

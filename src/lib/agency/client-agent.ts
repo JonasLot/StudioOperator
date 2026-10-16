@@ -10,7 +10,7 @@
 // server-only — the structural outputs are unit-tested.
 // ===========================================================================
 
-import type { BriefAnalysis, JobSource, MessageChannel } from "@/lib/domain/types";
+import type { BriefView, JobSource, MessageChannel } from "@/lib/domain/types";
 import type { ServiceTemplate } from "./templates";
 
 export type QuestionCategory = "quality" | "cost" | "rights" | "deadline";
@@ -52,7 +52,7 @@ const QUESTION_RULES: { re: RegExp; category: QuestionCategory; question: string
  * deadline. A missing-information note that maps to none of these is dropped.
  */
 export function missingQuestions(
-  analysis: Pick<BriefAnalysis, "missingInformation" | "rightsConcerns">,
+  analysis: Pick<BriefView, "missingInformation" | "rightsConcerns">,
   limit = 6,
 ): IntakeQuestion[] {
   const out: IntakeQuestion[] = [];
@@ -75,7 +75,7 @@ export function missingQuestions(
 // --- asset requests ----------------------------------------------------------
 
 /** The specific assets worth requesting for this brief — only those that are relevant. */
-export function assetRequests(analysis: Pick<BriefAnalysis, "summary" | "brandConstraints" | "exactText" | "rightsConcerns" | "deliverables" | "references">): AssetRequest[] {
+export function assetRequests(analysis: Pick<BriefView, "summary" | "brandConstraints" | "exactText" | "rightsConcerns" | "deliverables" | "references">): AssetRequest[] {
   const text = `${analysis.summary} ${analysis.brandConstraints.join(" ")}`.toLowerCase();
   const out: AssetRequest[] = [];
   const add = (asset: string, why: string) => out.push({ id: `a${out.length + 1}`, asset, why });
@@ -99,7 +99,7 @@ export function assetRequests(analysis: Pick<BriefAnalysis, "summary" | "brandCo
 
 // --- scope + proposal --------------------------------------------------------
 
-export function scopeSummary(opts: { title: string; clientName: string | null; analysis: Pick<BriefAnalysis, "deliverables">; template: ServiceTemplate | null; deadline: string }): string {
+export function scopeSummary(opts: { title: string; clientName: string | null; analysis: Pick<BriefView, "deliverables">; template: ServiceTemplate | null; deadline: string }): string {
   const dels = opts.analysis.deliverables.map((d) => (d.quantity > 1 ? `${d.quantity}× ` : "") + d.title).join(", ") || "the agreed deliverables";
   const base = `Here's the scope as I understand it for "${opts.title}": ${dels}, delivered by ${opts.deadline}.`;
   return opts.template ? `${base} Running on our ${opts.template.name} service (${opts.template.deliverablesSummary}).` : base;
@@ -108,7 +108,7 @@ export function scopeSummary(opts: { title: string; clientName: string | null; a
 export interface ProposalInput {
   title: string;
   clientName: string | null;
-  analysis: Pick<BriefAnalysis, "deliverables">;
+  analysis: Pick<BriefView, "deliverables">;
   template: ServiceTemplate | null;
   priceUsd: number;
   deadline: string;

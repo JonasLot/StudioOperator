@@ -4,7 +4,8 @@ import { analyzeBrief } from "@/lib/analysis/astra";
 import { computeCostPlan } from "@/lib/analysis/cost";
 import { decideJob, type FinalDecision } from "@/lib/analysis/decision";
 import type { Analysis } from "@/lib/analysis/schema";
-import type { IntakeAnalysis, Job } from "@/lib/domain/types";
+import { deriveBriefFacts } from "@/lib/analysis/view";
+import type { BriefView, IntakeAnalysis, Job } from "@/lib/domain/types";
 import { getRepo } from "@/lib/repo";
 import { daysUntil } from "@/lib/utils";
 import { newId } from "./ids";
@@ -83,6 +84,24 @@ export function effectiveAnalysis(record: IntakeAnalysis): Analysis {
   return record.edited ?? record.original;
 }
 
+/** The brief as screens, QA and planning read it: derived from the effective analysis, never stored. */
+export function briefView(record: IntakeAnalysis): BriefView {
+  return {
+    ...deriveBriefFacts(effectiveAnalysis(record)),
+    id: record.id,
+    jobId: record.jobId,
+    analyzer: record.analyzer,
+    decision: record.decision,
+    rationale: record.decisionReasons,
+    createdAt: record.createdAt,
+  };
+}
+
+export function getBrief(jobId: string): BriefView | null {
+  const record = getRepo().getLatestIntakeAnalysis(jobId);
+  return record ? briefView(record) : null;
+}
+
 export interface ReviewInput {
   edited: Analysis; // the (possibly unchanged) human-reviewed analysis
   action: "save" | "approve" | "reject";
@@ -92,6 +111,8 @@ export interface ReviewInput {
 /**
  * Save the human-edited analysis and re-run the deterministic decision on it.
  * `original` is never overwritten, so the two can always be compared.
+ * `changed` tells the caller whether the effective analysis differs, so the plan
+ * can be rebuilt from it (see studio.replanFromIntake).
  */
 export function reviewIntake(jobId: string, input: ReviewInput) {
   const repo = getRepo();
@@ -99,6 +120,7 @@ export function reviewIntake(jobId: string, input: ReviewInput) {
   const record = repo.getLatestIntakeAnalysis(jobId);
   if (!job || !record) throw new Error("No intake analysis to review.");
 
+  const changed = JSON.stringify(input.edited) !== JSON.stringify(effectiveAnalysis(record));
   const { decision, reasons, estimatedSpend } = evaluateAnalysis(input.edited, job);
   const reviewer = input.reviewer ?? config.operatorName;
   const reviewStatus = input.action === "approve" ? "approved" : input.action === "reject" ? "rejected" : "pending";
@@ -124,5 +146,5 @@ export function reviewIntake(jobId: string, input: ReviewInput) {
     }
   });
 
-  return { decision, reasons, estimatedSpend, reviewStatus };
+  return { decision, reasons, estimatedSpend, reviewStatus, changed };
 }
