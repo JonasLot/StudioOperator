@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, CheckCircle2, CircleSlash, RotateCcw, TriangleAlert, Download, FlaskConical } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, CircleSlash, RotateCcw, TriangleAlert, Download, FlaskConical, Bot, ShieldCheck, Mail, ScrollText, Flag, Send } from "lucide-react";
 import { resetDemoToPresentAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
+import { AUDIT_KIND_LABEL, CHANNEL_LABEL, MESSAGE_TYPE_LABEL, type AuditKind, type MessageChannel, type MessageType } from "@/lib/domain/types";
 import type { QaReport, QaStatus, QaVerdict } from "@/lib/qa/qa";
 import { VERDICT_LABEL } from "@/lib/qa/qa";
 import type { RepairDecision } from "@/lib/qa/repair";
@@ -23,6 +24,14 @@ interface PresenterData {
   qa: { outputs: { generationId: string; stepName: string; deliverable: string; modelLabel: string; report: QaReport; repair: RepairDecision | null }[]; overallVerdict: QaVerdict | null; autoRepairable: number; needsApproval: number; limits: { perRepairMaxUsd: number; perJobRepairMaxUsd: number; maxAutoRepairsPerJob: number } };
   deliverables: { title: string; url: string; type: string; attempt: number }[];
   deliveryNote: string;
+  autonomy: { maxAutoSpendPerJobUsd: number; maxAutoSpendPerRepairUsd: number; maxAttemptsPerStep: number; autoSendMessageTypes: MessageType[]; autoShareConcepts: boolean; finalDeliveryAlwaysApproval: boolean };
+  template: { name: string; deliverablesSummary: string; includedRevisions: number; targetGrossMarginPct: number; maxProductionSpendUsd: number } | null;
+  clientMemory: { displayName: string; tone: string | null; colors: string[]; fonts: string[]; productDetails: string[]; rejectedStyles: string[]; deliveryPreferences: string | null } | null;
+  messages: { id: string; type: MessageType; channel: MessageChannel; subject: string; body: string; status: string; autoAllowed: boolean; heldReason: string | null }[];
+  auditLog: { kind: AuditKind; actor: string; summary: string; detail: string | null; costDeltaUsd: number | null }[];
+  escalations: { id: string; reason: string; title: string; detail: string; recommendedAction: string; status: string }[];
+  selfRepairs: { stepName: string; modelLabel: string; component: string | null; action: string; auto: boolean; incrementalCostUsd: number; recommendation: string; escalationReason: string | null }[];
+  deliveryPending: boolean;
 }
 
 const STEPS = ["Brief", "Analysis", "Approval", "Generation", "QA", "Delivery"] as const;
@@ -59,6 +68,19 @@ export function Presenter({ data }: { data: PresenterData }) {
         </form>
       </div>
 
+      {/* Supervised-autonomy strip: the agent runs the job; the human owns the promises that matter. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-4 py-2.5 text-[12.5px]">
+        <span className="inline-flex items-center gap-1.5 font-medium"><Bot className="size-4 text-brand" /> Agent runs the job</span>
+        <span className="text-muted-foreground">·</span>
+        <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" /> You own: contracts, payments, rights/identity, final delivery</span>
+        <span className="ml-auto flex flex-wrap items-center gap-2 text-muted-foreground">
+          <span className="tnum rounded bg-muted px-2 py-0.5">auto ≤ {usd(d.autonomy.maxAutoSpendPerJobUsd)}/job</span>
+          <span className="tnum rounded bg-muted px-2 py-0.5">≤ {usd(d.autonomy.maxAutoSpendPerRepairUsd)}/repair</span>
+          <span className="rounded bg-muted px-2 py-0.5">concepts {d.autonomy.autoShareConcepts ? "auto" : "approval"}</span>
+          <span className="rounded bg-muted px-2 py-0.5">delivery {d.autonomy.finalDeliveryAlwaysApproval ? "approval" : "auto"}</span>
+        </span>
+      </div>
+
       {/* Big status + step-through */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -89,6 +111,38 @@ export function Presenter({ data }: { data: PresenterData }) {
         </section>
       ) : null}
 
+      {/* Client memory + template (account-level context the agent carries in) */}
+      {show(0) && (d.clientMemory || d.template) ? (
+        <section className="grid gap-4 md:grid-cols-2">
+          {d.clientMemory ? (
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="mb-2 text-[14px] font-semibold">Client memory — {d.clientMemory.displayName}</h3>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]">
+                {d.clientMemory.tone ? (<><dt className="text-muted-foreground">Tone</dt><dd>{d.clientMemory.tone}</dd></>) : null}
+                {d.clientMemory.colors.length ? (<><dt className="text-muted-foreground">Colours</dt><dd className="flex flex-wrap items-center gap-1.5">{d.clientMemory.colors.map((c) => <span key={c} className="inline-flex items-center gap-1"><span className="inline-block size-3 rounded-sm border" style={{ background: c }} />{c}</span>)}</dd></>) : null}
+                {d.clientMemory.fonts.length ? (<><dt className="text-muted-foreground">Fonts</dt><dd>{d.clientMemory.fonts.join(", ")}</dd></>) : null}
+                {d.clientMemory.rejectedStyles.length ? (<><dt className="text-muted-foreground">Avoid</dt><dd>{d.clientMemory.rejectedStyles.join(", ")}</dd></>) : null}
+                {d.clientMemory.deliveryPreferences ? (<><dt className="text-muted-foreground">Delivery</dt><dd>{d.clientMemory.deliveryPreferences}</dd></>) : null}
+              </dl>
+              <p className="mt-2 text-[11.5px] text-muted-foreground">Memory is never consent for a new person’s likeness, voice, or a new use.</p>
+            </div>
+          ) : null}
+          {d.template ? (
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="mb-2 flex items-center gap-1.5 text-[14px] font-semibold"><Bot className="size-4 text-brand" /> {d.template.name} template</h3>
+              <p className="rounded-md bg-muted px-2.5 py-1.5 text-[12.5px]">{d.template.deliverablesSummary}</p>
+              <dl className="mt-2 grid grid-cols-3 gap-2 text-[12.5px]">
+                <div><dt className="text-muted-foreground">Target margin</dt><dd className="tnum font-medium text-ok">{pct(d.template.targetGrossMarginPct)}</dd></div>
+                <div><dt className="text-muted-foreground">Max spend</dt><dd className="tnum font-medium">{usd(d.template.maxProductionSpendUsd)}</dd></div>
+                <div><dt className="text-muted-foreground">Incl. revisions</dt><dd className="tnum font-medium">{d.template.includedRevisions}</dd></div>
+              </dl>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed bg-card/50 p-5 text-[12.5px] text-muted-foreground">Bespoke run — no fixed template. Routed by the model router for this specific creative problem.</div>
+          )}
+        </section>
+      ) : null}
+
       {/* 2. Analysis */}
       {show(1) && d.analysis ? (
         <section className="rounded-xl border bg-card p-5">
@@ -104,6 +158,32 @@ export function Presenter({ data }: { data: PresenterData }) {
                 <div className="font-medium">{x.quantity > 1 ? `${x.quantity}× ` : ""}{x.title}</div>
                 <div className="text-muted-foreground">{[x.kind, x.aspectRatio, x.durationSec ? `${x.durationSec}s` : null, x.resolution].filter(Boolean).join(" · ")}</div>
               </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Client Agent conversation — drafted vs auto-sent per autonomy + channel */}
+      {show(1) && d.messages.length ? (
+        <section className="rounded-xl border bg-card p-5">
+          <h2 className="mb-1 flex items-center gap-2 text-[18px] font-semibold"><Mail className="size-4 text-muted-foreground" /> Client Agent</h2>
+          <p className="mb-3 text-[13px] text-muted-foreground">The agent writes the client relationship. Messages are auto-sent only on an allowed channel and type; everything else is drafted for you. Third-party marketplaces are never auto-sent.</p>
+          <div className="flex flex-col gap-2.5">
+            {d.messages.map((m) => (
+              <details key={m.id} className="rounded-lg border">
+                <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-[13px]">
+                  <span className="font-medium">{MESSAGE_TYPE_LABEL[m.type]}</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{CHANNEL_LABEL[m.channel]}</span>
+                  <span className={cn("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium", m.status === "sent" ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn")}>
+                    {m.status === "sent" ? <><Send className="size-3" /> {m.autoAllowed ? "auto-sent" : "sent"}</> : <>drafted — needs approval</>}
+                  </span>
+                  <span className="ml-auto truncate text-muted-foreground">{m.subject}</span>
+                </summary>
+                <div className="border-t px-3 py-2.5">
+                  {m.heldReason ? <p className="mb-2 rounded bg-warn-soft/50 px-2 py-1 text-[12px] text-warn">{m.heldReason}</p> : null}
+                  <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground/90">{m.body}</pre>
+                </div>
+              </details>
             ))}
           </div>
         </section>
@@ -178,10 +258,57 @@ export function Presenter({ data }: { data: PresenterData }) {
         </section>
       ) : null}
 
+      {/* Supervised self-repair loop */}
+      {show(4) && d.selfRepairs.length ? (
+        <section className="rounded-xl border bg-card p-5">
+          <h2 className="mb-1 text-[18px] font-semibold">Supervised self-repair</h2>
+          <p className="mb-3 text-[13px] text-muted-foreground">For each failed component the agent picks the smallest fix and continues on its own only within the pre-approved spend limit and with no new rights/identity concern. Everything else escalates.</p>
+          <div className="flex flex-col gap-2">
+            {d.selfRepairs.map((r, i) => (
+              <div key={i} className={cn("rounded-lg border px-3 py-2.5 text-[12.5px]", r.auto ? "bg-ok-soft/40" : "bg-warn-soft/50")}>
+                <div className="flex flex-wrap items-center gap-2">
+                  {r.auto ? <CheckCircle2 className="size-4 text-ok" /> : <TriangleAlert className="size-4 text-warn" />}
+                  <span className="font-medium">{r.stepName}</span>
+                  <span className="text-muted-foreground">· {r.component ?? "issue"}</span>
+                  <span className="rounded bg-card px-1.5 py-0.5 text-[11px]">{r.action.replace(/_/g, " ")}</span>
+                  <span className="ml-auto tnum text-muted-foreground">+{usd(r.incrementalCostUsd, { cents: true })}</span>
+                </div>
+                <p className="mt-1 text-muted-foreground">{r.recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Escalations — what the agent handed to the human */}
+      {show(4) && d.escalations.length ? (
+        <section className="rounded-xl border bg-card p-5">
+          <h2 className="mb-3 flex items-center gap-2 text-[18px] font-semibold"><Flag className="size-4 text-warn" /> Escalations to you</h2>
+          <div className="flex flex-col gap-2">
+            {d.escalations.map((e) => (
+              <div key={e.id} className="rounded-lg border px-3 py-2.5 text-[12.5px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{e.title}</span>
+                  <span className={cn("rounded px-1.5 py-0.5 text-[11px]", e.status === "open" ? "bg-warn-soft text-warn" : "bg-ok-soft text-ok")}>{e.status}</span>
+                </div>
+                <p className="mt-1 text-muted-foreground">{e.detail}</p>
+                <p className="mt-1"><span className="font-medium">Recommended:</span> {e.recommendedAction}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {/* 6. Delivery */}
       {show(5) ? (
         <section className="rounded-xl border bg-card p-5">
           <h2 className="mb-3 text-[18px] font-semibold">Final deliverables</h2>
+          <div className={cn("mb-4 flex items-center gap-2 rounded-lg px-3 py-2.5 text-[13px]", d.deliveryPending ? "bg-warn-soft text-warn" : "bg-ok-soft text-ok")}>
+            {d.deliveryPending ? <TriangleAlert className="size-4" /> : <CheckCircle2 className="size-4" />}
+            {d.deliveryPending
+              ? "Delivery is drafted and ready — but final delivery always requires your approval. The agent cannot send it on its own."
+              : "Final delivery was approved by you."}
+          </div>
           {d.deliverables.length ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {d.deliverables.map((x, i) => (
@@ -202,6 +329,29 @@ export function Presenter({ data }: { data: PresenterData }) {
           )}
           <h3 className="mb-2 mt-5 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">Client-ready delivery note (drafted by Astra)</h3>
           <pre className="whitespace-pre-wrap rounded-lg bg-muted/40 p-4 text-[13.5px] leading-relaxed">{d.deliveryNote}</pre>
+        </section>
+      ) : null}
+
+      {/* Autonomy audit log — every model decision, message, approval, generation, repair, cost change, escalation */}
+      {show(4) && d.auditLog.length ? (
+        <section className="rounded-xl border bg-card p-5">
+          <h2 className="mb-1 flex items-center gap-2 text-[18px] font-semibold"><ScrollText className="size-4 text-muted-foreground" /> Autonomy audit log</h2>
+          <p className="mb-3 text-[13px] text-muted-foreground">Everything the agent did or proposed, so the human can supervise the promises that matter.</p>
+          <div className="max-h-80 overflow-auto">
+            <table className="w-full text-[12.5px]">
+              <thead className="sticky top-0 bg-card text-left text-[11px] uppercase tracking-wide text-muted-foreground"><tr><th className="py-1 pr-3">Kind</th><th className="py-1 pr-3">Who</th><th className="py-1 pr-3">Event</th><th className="py-1 text-right">Δ cost</th></tr></thead>
+              <tbody>
+                {d.auditLog.map((a, i) => (
+                  <tr key={i} className="border-t align-top">
+                    <td className="py-1.5 pr-3 whitespace-nowrap"><span className="rounded bg-muted px-1.5 py-0.5 text-[11px]">{AUDIT_KIND_LABEL[a.kind]}</span></td>
+                    <td className="py-1.5 pr-3 text-muted-foreground">{a.actor}</td>
+                    <td className="py-1.5 pr-3">{a.summary}{a.detail ? <span className="block text-[11.5px] text-muted-foreground">{a.detail}</span> : null}</td>
+                    <td className="py-1.5 text-right tnum text-muted-foreground">{a.costDeltaUsd != null ? usd(a.costDeltaUsd, { cents: true }) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
     </div>

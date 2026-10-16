@@ -4,8 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeParseAnalysis, type Analysis } from "@/lib/analysis/schema";
-import { JOB_SOURCES } from "@/lib/domain/types";
+import { JOB_SOURCES, PAUSE_CONDITIONS, type MessageType, type PauseCondition } from "@/lib/domain/types";
 import { resetDemo } from "@/lib/seed";
+import * as agency from "@/lib/services/agency";
 import { GuardrailError } from "@/lib/services/guardrails";
 import * as intake from "@/lib/services/intake";
 import * as studio from "@/lib/services/studio";
@@ -144,4 +145,47 @@ export async function resetDemoToPresentAction() {
   await resetDemo();
   revalidatePath("/", "layout");
   redirect("/present");
+}
+
+// --- supervised autonomy ---------------------------------------------------
+
+export async function approveAndSendMessageAction(jobId: string, messageId: string) {
+  return run(jobId, () => agency.approveAndSendMessage(messageId), "Message approved and sent.");
+}
+
+export async function resolveEscalationAction(jobId: string | null, escalationId: string) {
+  return run(jobId, () => agency.resolveEscalation(escalationId), "Escalation resolved.");
+}
+
+const AUTONOMY_MESSAGE_TYPES = [
+  "intake_questions", "asset_request", "proposal", "progress_update", "concept_presentation", "revision_reply", "change_order", "delivery", "feedback_request",
+] as const satisfies readonly MessageType[];
+
+export type AutonomyState = { error?: string; ok?: boolean } | undefined;
+
+export async function saveAutonomyAction(_prev: AutonomyState, form: FormData): Promise<AutonomyState> {
+  const num = (k: string, d: number) => {
+    const n = Number(form.get(k));
+    return Number.isFinite(n) && n >= 0 ? n : d;
+  };
+  try {
+    const alwaysPause = Object.fromEntries(
+      PAUSE_CONDITIONS.map((c) => [c, form.get(`pause_${c}`) === "on"]),
+    ) as Record<PauseCondition, boolean>;
+    agency.saveAutonomy({
+      maxAutoSpendPerJobUsd: num("maxAutoSpendPerJobUsd", 60),
+      maxAutoSpendPerRepairUsd: num("maxAutoSpendPerRepairUsd", 8),
+      maxAttemptsPerStep: num("maxAttemptsPerStep", 16),
+      allowedModelFamilies: (form.get("allowedModelFamilies")?.toString() ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+      autoSendMessageTypes: AUTONOMY_MESSAGE_TYPES.filter((t) => form.get(`msg_${t}`) === "on"),
+      autoShareConcepts: form.get("autoShareConcepts") === "on",
+      finalDeliveryAlwaysApproval: form.get("finalDeliveryAlwaysApproval") === "on",
+      alwaysPause,
+    });
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+  revalidatePath("/autonomy");
+  revalidatePath("/present");
+  return { ok: true };
 }

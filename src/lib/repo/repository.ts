@@ -1,7 +1,12 @@
 import type {
   ActivityEvent,
+  AgentMessage,
   ApprovalRequest,
+  AuditEntry,
+  AutonomySettings,
   BriefAnalysis,
+  ClientMemory,
+  Escalation,
   Generation,
   IntakeAnalysis,
   Job,
@@ -60,6 +65,27 @@ export interface StudioRepository {
 
   insertAsset(a: StoredAsset): void;
   getAsset(id: string): StoredAsset | null;
+
+  // --- supervised autonomy ---
+  getAutonomy(): AutonomySettings | null;
+  upsertAutonomy(s: AutonomySettings): void;
+
+  listClientMemory(): ClientMemory[];
+  getClientMemory(clientKey: string): ClientMemory | null;
+  upsertClientMemory(m: ClientMemory): void;
+
+  listAgentMessages(jobId?: string): AgentMessage[];
+  getAgentMessage(id: string): AgentMessage | null;
+  insertAgentMessage(m: AgentMessage): void;
+  updateAgentMessage(id: string, patch: Partial<Omit<AgentMessage, "id" | "jobId">>): void;
+
+  listAudit(jobId?: string): AuditEntry[];
+  insertAudit(e: AuditEntry): void;
+
+  listEscalations(jobId?: string): Escalation[];
+  getEscalation(id: string): Escalation | null;
+  insertEscalation(e: Escalation): void;
+  updateEscalation(id: string, patch: Partial<Omit<Escalation, "id" | "jobId">>): void;
 
   countJobs(): number;
   wipe(): void;
