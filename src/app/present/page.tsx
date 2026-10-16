@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { publicConfig } from "@/lib/config";
 import { getTemplate } from "@/lib/agency/templates";
-import type { BriefAnalysis, Job } from "@/lib/domain/types";
+import type { BriefView, Job } from "@/lib/domain/types";
 import { getModel } from "@/lib/higgsfield/catalog";
 import { ensureSeeded } from "@/lib/seed";
 import * as agency from "@/lib/services/agency";

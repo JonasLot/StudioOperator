@@ -91,6 +91,8 @@ function clearOpenRights(jobId: string) {
   for (const a of getRepo().listApprovals(jobId).filter((x) => x.kind === "rights_clearance" && x.status === "pending")) {
     clearRights(jobId, a.id, "Brand assets confirmed with the client.");
   }
+}
+
 /**
  * After the Rain: Glass Monument — the full supervised client relationship on the
  * Launch Video template: one missing-input question, asset requests, a proposal,

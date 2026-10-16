@@ -4,7 +4,6 @@ import type {
   ApprovalRequest,
   AuditEntry,
   AutonomySettings,
-  BriefAnalysis,
   ClientMemory,
   Escalation,
   Generation,

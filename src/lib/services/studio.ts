@@ -20,7 +20,6 @@ import { getModel } from "@/lib/higgsfield/catalog";
 import { getProvider } from "@/lib/higgsfield/provider";
 import { getRepo } from "@/lib/repo";
 import { audit } from "./audit";
-import { decide } from "./decision";
 import { computeProfitability } from "./economics";
 import {
   GuardrailError,
@@ -210,7 +209,7 @@ export function replanFromIntake(jobId: string) {
       log(jobId, "system", `No catalog price for ${costPlan.unpricedCapabilities.join(", ")} — left out of the plan and routed to human review.`);
     }
     log(jobId, "agent", `Production plan v${version}: ${workflow.steps.length} steps, est. $${workflow.estimatedTotalCost.toFixed(2)}, proposed cap $${workflow.maxBudget}.`);
-    audit({ jobId, kind: "decision", summary: `${draft.analyzer} recommended "${decision}" (${Math.round(analysis.confidence * 100)}% confidence, ${workflow.steps.length}-step plan, est. $${workflow.estimatedTotalCost.toFixed(2)}).`, detail: rationale.join(" ") });
+    audit({ jobId, kind: "decision", summary: `${record.analyzer} recommended "${decision}" (${analysis.confidence}% confidence, ${workflow.steps.length}-step plan, est. $${workflow.estimatedTotalCost.toFixed(2)}).`, detail: record.decisionReasons.join(" ") });
 
     if (decision === "reject") {
       repo.updateJob(jobId, { status: "rejected", rightsCleared: false });
