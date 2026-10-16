@@ -62,10 +62,11 @@ export function getBundle(jobId: string): JobBundle | null {
   const repo = getRepo();
   const job = repo.getJob(jobId);
   if (!job) return null;
+  const intake = repo.getLatestIntakeAnalysis(jobId);
   return {
     job,
-    analysis: getBrief(jobId),
-    intake: repo.getLatestIntakeAnalysis(jobId),
+    analysis: intake ? briefView(intake) : null,
+    intake,
     workflow: repo.getCurrentWorkflow(jobId),
     generations: repo.listGenerations(jobId),
     revisions: repo.listRevisions(jobId),
@@ -74,16 +75,30 @@ export function getBundle(jobId: string): JobBundle | null {
   };
 }
 
+/** Group rows by job id so a list screen can read each table once instead of once per job. */
+function byJob<T extends { jobId: string }>(rows: T[]): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const list = m.get(r.jobId);
+    if (list) list.push(r);
+    else m.set(r.jobId, [r]);
+  }
+  return m;
+}
+
 export function getDashboard() {
   const repo = getRepo();
   const jobs = repo.listJobs();
   const analyses = new Map(repo.listLatestIntakeAnalyses().map((a) => [a.jobId, briefView(a)]));
   const workflows = new Map(repo.listCurrentWorkflows().map((w) => [w.jobId, w]));
   const approvals = repo.listApprovals();
+  // One query per table, not one per job: every extra query is a network round trip on a remote database.
+  const allGenerations = byJob(repo.listAllGenerations());
+  const allRevisions = byJob(repo.listAllRevisions());
   return jobs.map((job) => {
     const workflow = workflows.get(job.id) ?? null;
-    const generations = repo.listGenerations(job.id);
-    const revisions = repo.listRevisions(job.id);
+    const generations = allGenerations.get(job.id) ?? [];
+    const revisions = allRevisions.get(job.id) ?? [];
     const p = computeProfitability(job, workflow, generations, revisions);
     const active = generations.filter((g) => g.status === "queued" || g.status === "in_progress").length;
     const done = generations.filter((g) => g.status === "completed").length;

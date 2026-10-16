@@ -10,28 +10,34 @@ import { parseMockSetting, resolveMockForced, resolveMockMode, type MockSetting,
 // ---------------------------------------------------------------------------
 
 const TTL_MS = 5_000;
-type Entry = { at: number; value: string | null };
-const g = globalThis as unknown as { __studioSettingsCache?: Map<string, Entry> };
-const cache = () => (g.__studioSettingsCache ??= new Map());
+type Snapshot = { at: number; values: Map<string, string> };
+const g = globalThis as unknown as { __studioSettings?: Snapshot };
 
-function read(key: string): string | null {
-  const hit = cache().get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
-  let value: string | null = null;
+// One query loads every setting, so a page that reads the profile, the mock-mode override and
+// more costs a single round trip per TTL instead of one per key.
+function snapshot(): Map<string, string> {
+  const hit = g.__studioSettings;
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.values;
+  const values = new Map<string, string>();
   try {
-    value = getRepo().getSetting(key);
+    for (const row of getRepo().listSettings()) values.set(row.key, row.value);
   } catch {
-    /* database not reachable yet — behave as if unset */
+    /* database not reachable yet — behave as if nothing is set */
   }
-  cache().set(key, { at: Date.now(), value });
-  return value;
+  g.__studioSettings = { at: Date.now(), values };
+  return values;
 }
+
+const read = (key: string): string | null => snapshot().get(key) ?? null;
 
 function write(key: string, value: string | null) {
   const repo = getRepo();
   if (value === null) repo.deleteSetting(key);
   else repo.setSetting(key, value);
-  cache().set(key, { at: Date.now(), value });
+  const values = new Map(snapshot());
+  if (value === null) values.delete(key);
+  else values.set(key, value);
+  g.__studioSettings = { at: Date.now(), values };
 }
 
 // --- mock-mode override ---

@@ -1,6 +1,7 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
+import { schemaVersion } from "./schema-version";
 import type {
   ActivityEvent,
   AgentMessage,
@@ -96,6 +97,9 @@ const SPEC = {
   escalation: {},
 } satisfies Record<string, FieldSpec>;
 
+// Additive column migrations for databases created before a column existed.
+const MIGRATIONS = ["ALTER TABLE generations ADD COLUMN timed_out_at TEXT", "ALTER TABLE jobs ADD COLUMN template_id TEXT"];
+
 // ---------- repository ----------
 
 export class SqliteStudioRepository implements StudioRepository {
@@ -107,15 +111,34 @@ export class SqliteStudioRepository implements StudioRepository {
   constructor(db: SqlDatabase) {
     this.db = db;
     const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/repo/schema.sql"), "utf8");
-    this.db.exec(schema);
-    this.migrate();
+    // Applying the schema is dozens of statements — on a remote database that is seconds of round trips on
+    // every cold start. Remember which schema a database already has (PRAGMA user_version) and skip the work.
+    const version = schemaVersion(schema, MIGRATIONS);
+    if (this.currentSchemaVersion() !== version) {
+      this.db.exec(schema);
+      this.migrate();
+      try {
+        this.db.exec(`PRAGMA user_version = ${version}`);
+      } catch {
+        /* unsupported: the schema is simply re-applied next start */
+      }
+    }
+  }
+
+  private currentSchemaVersion(): number | null {
+    try {
+      const row = this.db.prepare("PRAGMA user_version").get() as { user_version?: number } | undefined;
+      return typeof row?.user_version === "number" ? row.user_version : null;
+    } catch {
+      return null;
+    }
   }
 
   // Idempotent additive migrations for databases created before a column existed.
   // CREATE TABLE IF NOT EXISTS does not add columns to an existing table, so new
   // nullable columns are added here; a duplicate-column error just means it's present.
   private migrate() {
-    for (const sql of ["ALTER TABLE generations ADD COLUMN timed_out_at TEXT", "ALTER TABLE jobs ADD COLUMN template_id TEXT"]) {
+    for (const sql of MIGRATIONS) {
       try {
         this.db.exec(sql);
       } catch {
@@ -215,7 +238,14 @@ export class SqliteStudioRepository implements StudioRepository {
        ON w.job_id = l.job_id AND w.version = l.v`,
       SPEC.workflow,
     );
-    return rows.map((r) => this.hydrate(r)!);
+    if (!rows.length) return [];
+    // One query for every workflow's steps (hydrate() would be one query per workflow).
+    const steps = this.all<WorkflowStep>(
+      `SELECT * FROM workflow_steps WHERE workflow_id IN (${rows.map(() => "?").join(",")}) ORDER BY "order"`,
+      SPEC.step,
+      ...rows.map((r) => r.id),
+    );
+    return rows.map((r) => ({ ...r, steps: steps.filter((st) => st.workflowId === r.id) }));
   }
   insertWorkflow(w: Workflow) {
     const { steps, ...rest } = w;
@@ -232,6 +262,9 @@ export class SqliteStudioRepository implements StudioRepository {
   // generations
   listGenerations(jobId: string) {
     return this.all<Generation>("SELECT * FROM generations WHERE job_id = ? ORDER BY created_at, attempt", SPEC.generation, jobId);
+  }
+  listAllGenerations() {
+    return this.all<Generation>("SELECT * FROM generations ORDER BY created_at, attempt", SPEC.generation);
   }
   listActiveGenerations() {
     return this.all<Generation>(
@@ -254,6 +287,9 @@ export class SqliteStudioRepository implements StudioRepository {
   listRevisions(jobId: string) {
     return this.all<Revision>("SELECT * FROM revisions WHERE job_id = ? ORDER BY created_at DESC", SPEC.revision, jobId);
   }
+  listAllRevisions() {
+    return this.all<Revision>("SELECT * FROM revisions ORDER BY created_at DESC", SPEC.revision);
+  }
   getRevision(id: string) {
     return this.one<Revision>("SELECT * FROM revisions WHERE id = ?", SPEC.revision, id);
   }
@@ -269,6 +305,9 @@ export class SqliteStudioRepository implements StudioRepository {
     return jobId
       ? this.all<ApprovalRequest>("SELECT * FROM approvals WHERE job_id = ? ORDER BY created_at", SPEC.approval, jobId)
       : this.all<ApprovalRequest>("SELECT * FROM approvals ORDER BY created_at", SPEC.approval);
+  }
+  countPendingApprovals() {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM approvals WHERE status = 'pending'").get() as { n: number }).n;
   }
   getApproval(id: string) {
     return this.one<ApprovalRequest>("SELECT * FROM approvals WHERE id = ?", SPEC.approval, id);
@@ -359,6 +398,9 @@ export class SqliteStudioRepository implements StudioRepository {
   getSetting(key: string) {
     const row = this.db.prepare("SELECT value FROM app_settings WHERE key = ?").get(key) as { value: string } | undefined;
     return row?.value ?? null;
+  }
+  listSettings() {
+    return this.db.prepare("SELECT key, value FROM app_settings WHERE key NOT LIKE 'login:%'").all() as { key: string; value: string }[];
   }
   setSetting(key: string, value: string) {
     this.db

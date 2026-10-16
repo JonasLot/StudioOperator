@@ -14,9 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   await ensureSeeded();
   const cfg = publicConfig();
-  const approvals = getRepo()
-    .listApprovals()
-    .filter((a) => a.status === "pending").length;
+  const approvals = getRepo().countPendingApprovals();
   const profile = getProfile();
   const loginOn = authEnabled();
   const live = `Live · Astra ${cfg.astraLive ? "on" : "off"} · Higgsfield ${cfg.higgsfieldLive ? "on" : "off"}`;
