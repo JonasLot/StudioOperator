@@ -47,6 +47,22 @@ Alternatively, deploy to a host with a persistent disk (Render, Railway, Fly.io)
 `DATABASE_PATH` at the mounted volume; the local SQLite driver then persists jobs as-is. For a full
 SQL database, implement the `StudioRepository` interface against Postgres (see **Architecture**).
 
+## Sign-in, profile and mock mode
+
+**Sign-in.** Set `ADMIN_PASSCODE` (12+ characters) and every page, API route and server action requires a
+signed-in session. Sign in at `/login`; the session is a signed, httpOnly cookie that lasts seven days
+(`src/lib/auth/`). `src/proxy.ts` is the first gate, and every server action re-checks the session itself.
+Eight wrong passcodes from one address pause sign-in for fifteen minutes. Changing the passcode signs
+everyone out. With no `ADMIN_PASSCODE` there is nothing to sign in with, so the app stays open and shows a
+warning bar rather than locking you out.
+
+**Profile** (`/profile`). Your name (recorded on approvals, rights clearances and the audit log), the studio
+name shown in the sidebar, an optional contact email, and your session with a sign-out button.
+
+**Mock mode** (`/settings`). Switch between mock, live, or "follow `STUDIO_MOCK_MODE`" without redeploying.
+Going live asks for the admin passcode again. Live generation additionally needs the Higgsfield keys and
+`HIGGSFIELD_WIRE_ENABLED=true`. Profile and mode are stored in the database, so use Turso on Vercel for them to persist.
+
 ## API keys on the Settings page
 
 `/settings` has an **API keys** card for the OpenAI key and the Higgsfield key ID / secret, so you

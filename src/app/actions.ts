@@ -8,14 +8,19 @@ import { JOB_SOURCES, PAUSE_CONDITIONS, type MessageType, type PauseCondition } 
 import { resetDemo } from "@/lib/seed";
 import * as agency from "@/lib/services/agency";
 import { GuardrailError } from "@/lib/services/guardrails";
+import { authEnabled, clearLoginFailures, endSession, loginBlockedForMs, recordLoginFailure, requireSession, startSession } from "@/lib/auth";
+import { safeNextPath } from "@/lib/auth/session";
 import * as intake from "@/lib/services/intake";
 import * as studio from "@/lib/services/studio";
+import { mockSetting, saveProfile, setMockSetting } from "@/lib/settings";
+import { parseMockSetting, validateProfile, type Profile } from "@/lib/settings/rules";
 import { SECRET_DEFS, SECRET_NAMES, adminPasscode, saveSecrets, verifyAdminPasscode, type SecretName } from "@/lib/secrets";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
 async function run(jobId: string | null, fn: () => unknown | Promise<unknown>, message?: string): Promise<ActionResult> {
   try {
+    await requireSession();
     await fn();
     revalidatePath("/");
     if (jobId) revalidatePath(`/jobs/${jobId}`);
@@ -42,6 +47,7 @@ const NewJobSchema = z.object({
 export type NewJobState = { error?: string; fieldErrors?: Record<string, string[] | undefined> } | undefined;
 
 export async function createJobAction(_prev: NewJobState, form: FormData): Promise<NewJobState> {
+  await requireSession();
   const parsed = NewJobSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: "Check the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors };
   const d = parsed.data;
@@ -114,6 +120,7 @@ export async function retryGenerationAction(jobId: string, generationId: string)
   return run(jobId, () => studio.retryGeneration(jobId, generationId), "Retrying as a new attempt.");
 }
 export async function connectionTestAction(): Promise<ActionResult & { detail?: string; providerName?: string; live?: boolean }> {
+  await requireSession();
   const r = await studio.providerConnectionTest();
   return r.ok ? { ok: true, message: r.detail, detail: r.detail, providerName: r.name, live: r.live } : { ok: false, error: r.detail, detail: r.detail, providerName: r.name, live: r.live };
 }
@@ -127,6 +134,7 @@ export async function approveDeliveryAction(jobId: string, attestation: string) 
   return run(jobId, () => studio.approveFinalDelivery(jobId, attestation), "Final delivery approved.");
 }
 export async function reviewIntakeAction(jobId: string, edited: Analysis, action: "save" | "approve" | "reject"): Promise<ActionResult> {
+  await requireSession();
   const parsed = safeParseAnalysis(edited);
   if (!parsed.ok) return { ok: false, error: `Analysis is invalid: ${parsed.error}` };
   return run(
@@ -142,12 +150,14 @@ export async function reviewIntakeAction(jobId: string, edited: Analysis, action
 }
 
 export async function resetDemoAction() {
+  await requireSession();
   await resetDemo();
   revalidatePath("/", "layout");
   redirect("/");
 }
 
 export async function resetDemoToPresentAction() {
+  await requireSession();
   await resetDemo();
   revalidatePath("/", "layout");
   redirect("/present");
@@ -170,6 +180,7 @@ const AUTONOMY_MESSAGE_TYPES = [
 export type AutonomyState = { error?: string; ok?: boolean } | undefined;
 
 export async function saveAutonomyAction(_prev: AutonomyState, form: FormData): Promise<AutonomyState> {
+  await requireSession();
   const num = (k: string, d: number) => {
     const n = Number(form.get(k));
     return Number.isFinite(n) && n >= 0 ? n : d;
@@ -204,6 +215,7 @@ export type ApiKeysState = { ok?: true; message?: string; error?: string } | und
  * back or logged; the result only names which keys changed.
  */
 export async function saveApiKeysAction(_prev: ApiKeysState, form: FormData): Promise<ApiKeysState> {
+  await requireSession();
   if (!adminPasscode()) {
     return { error: "Saving keys here is switched off: set ADMIN_PASSCODE (12+ characters) in the server environment and redeploy." };
   }
@@ -232,4 +244,82 @@ export async function saveApiKeysAction(_prev: ApiKeysState, form: FormData): Pr
     console.error("Saving API keys failed:", (err as Error).name);
     return { error: "Could not save the keys. Check that the database is reachable." };
   }
+}
+
+// --- sign in / out ------------------------------------------------------------
+
+export type LoginState = { error?: string } | undefined;
+
+export async function loginAction(_prev: LoginState, form: FormData): Promise<LoginState> {
+  if (!authEnabled()) redirect("/");
+  const wait = await loginBlockedForMs();
+  if (wait > 0) return { error: `Too many wrong attempts. Try again in ${Math.ceil(wait / 60000)} minute(s).` };
+  if (!verifyAdminPasscode(String(form.get("passcode") ?? ""))) {
+    await recordLoginFailure();
+    await new Promise((resolve) => setTimeout(resolve, 800)); // slow down guessing
+    return { error: "Wrong passcode." };
+  }
+  await clearLoginFailures();
+  await startSession();
+  redirect(safeNextPath(String(form.get("next") ?? "")));
+}
+
+export async function logoutAction() {
+  await endSession();
+  redirect(authEnabled() ? "/login" : "/");
+}
+
+// --- profile --------------------------------------------------------------------
+
+export type ProfileState = { ok?: true; message?: string; error?: string; fieldErrors?: Partial<Record<keyof Profile, string>>; values?: Profile } | undefined;
+
+export async function saveProfileAction(_prev: ProfileState, form: FormData): Promise<ProfileState> {
+  await requireSession();
+  const parsed = validateProfile({ displayName: form.get("displayName"), studioName: form.get("studioName"), email: form.get("email") });
+  if (!parsed.ok) {
+    // Hand the typed values back so the form keeps them next to the errors.
+    const text = (k: string) => String(form.get(k) ?? "");
+    return { error: "Check the highlighted fields.", fieldErrors: parsed.errors, values: { displayName: text("displayName"), studioName: text("studioName"), email: text("email") } };
+  }
+  try {
+    saveProfile(parsed.value);
+  } catch (err) {
+    console.error("Saving profile failed:", (err as Error).name);
+    return { error: "Could not save the profile. Check that the database is reachable." };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Profile saved." };
+}
+
+// --- mock mode ------------------------------------------------------------------
+
+export type MockModeState = { ok?: true; message?: string; error?: string } | undefined;
+
+/**
+ * Switch between mock and live. Mock is always allowed (it can only reduce spend); going live,
+ * or back to following the environment, needs the admin passcode because it can start real spend.
+ */
+export async function setMockModeAction(_prev: MockModeState, form: FormData): Promise<MockModeState> {
+  await requireSession();
+  const choice = String(form.get("mode") ?? "");
+  if (choice !== "mock" && choice !== "live" && choice !== "default") return { error: "Pick a mode." };
+  if (choice !== "mock") {
+    if (!adminPasscode()) return { error: "Going live from here needs ADMIN_PASSCODE set on the server." };
+    if (!verifyAdminPasscode(String(form.get("passcode") ?? ""))) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      return { error: "Wrong admin passcode." };
+    }
+  }
+  try {
+    setMockSetting(choice === "default" ? null : parseMockSetting(choice));
+  } catch (err) {
+    console.error("Saving mock mode failed:", (err as Error).name);
+    return { error: "Could not save the setting. Check that the database is reachable." };
+  }
+  revalidatePath("/", "layout");
+  const now = mockSetting();
+  return {
+    ok: true,
+    message: now === "mock" ? "Mock mode is on — no external calls are made." : now === "live" ? "Live mode is on — providers with keys will be called." : "Following the server environment again.",
+  };
 }

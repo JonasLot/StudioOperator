@@ -355,6 +355,20 @@ export class SqliteStudioRepository implements StudioRepository {
     this.patch("escalations", id, patch, SPEC.escalation);
   }
 
+  // --- small key/value settings edited in the UI ---
+  getSetting(key: string) {
+    const row = this.db.prepare("SELECT value FROM app_settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+  setSetting(key: string, value: string) {
+    this.db
+      .prepare("INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+      .run(key, value, new Date().toISOString());
+  }
+  deleteSetting(key: string) {
+    this.db.prepare("DELETE FROM app_settings WHERE key = ?").run(key);
+  }
+
   // --- API keys entered in the UI ---
   listSecrets() {
     return (this.db.prepare("SELECT name, value, updated_at FROM app_secrets").all() as { name: string; value: string; updated_at: string }[]).map((r) => ({

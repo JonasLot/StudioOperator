@@ -1,6 +1,7 @@
 import "server-only";
 import type { JobSource } from "@/lib/domain/types";
 import { secretValue } from "@/lib/secrets";
+import { isMockForced, isMockMode, operatorName } from "@/lib/settings";
 
 // Server-only configuration. Secrets are read here and never serialised to the client.
 // Anything the UI needs to know is exposed through publicConfig() without secret values.
@@ -27,7 +28,10 @@ function defaultDatabasePath() {
 }
 
 export const config = {
-  mockMode: process.env.STUDIO_MOCK_MODE !== "false",
+  // Mock mode can be switched on the Settings page; that choice wins over STUDIO_MOCK_MODE.
+  get mockMode() {
+    return isMockMode();
+  },
   databasePath: defaultDatabasePath(),
 
   // When a Turso URL is set, the app uses the remote libSQL database (durable and
@@ -128,13 +132,16 @@ export const config = {
     finalDeliveryAlwaysApproval: process.env.AUTONOMY_DELIVERY_ALWAYS_APPROVAL !== "false",
   },
 
-  operatorName: process.env.OPERATOR_NAME || "Operator",
+  // The name approvals and audit entries are recorded under (Profile page; OPERATOR_NAME is the default).
+  get operatorName() {
+    return operatorName();
+  },
 };
 
 // Real GPT-6 Astra analysis runs when an API key is present, unless mock mode
 // is explicitly forced on. (The default unset state lets the key decide.)
 export function openaiLive() {
-  return config.openai.apiKey.length > 0 && process.env.STUDIO_MOCK_MODE !== "true";
+  return config.openai.apiKey.length > 0 && !isMockForced();
 }
 
 /** Whether brief analysis is live (UI label). Same switch as openaiLive: there is one analyzer. */

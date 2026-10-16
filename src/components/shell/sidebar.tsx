@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, ChevronRight, FolderOpen, Layers, LayoutGrid, Settings2, ShieldCheck, Split, Images } from "lucide-react";
+import { Bot, ChevronRight, FolderOpen, Layers, LayoutGrid, Settings2, ShieldCheck, Split, Images, UserRound } from "lucide-react";
+import { initials } from "@/lib/settings/rules";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -13,6 +14,7 @@ const NAV = [
   { href: "/models", label: "Model router", icon: Split, match: (p: string) => p.startsWith("/models") },
   { href: "/autonomy", label: "Autonomy", icon: Bot, match: (p: string) => p.startsWith("/autonomy") },
   { href: "/settings", label: "Connections", icon: Settings2, match: (p: string) => p.startsWith("/settings") },
+  { href: "/profile", label: "Profile", icon: UserRound, match: (p: string) => p.startsWith("/profile") },
 ];
 
 export function Logo({ compact = false }: { compact?: boolean }) {
@@ -78,15 +80,15 @@ export function SidebarNav({ approvals, orientation = "vertical" }: { approvals:
   );
 }
 
-export function WorkspaceCard() {
+export function WorkspaceCard({ studioName, displayName }: { studioName: string; displayName: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-[0_1px_2px_rgb(0_0_0/0.03)]">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-[13px] font-semibold">S</span>
+    <Link href="/profile" className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-[0_1px_2px_rgb(0_0_0/0.03)] transition-colors hover:bg-accent/50">
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-[13px] font-semibold">{initials(studioName)}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-medium leading-tight">Independent studio</span>
-        <span className="block text-[11.5px] text-muted-foreground">Personal workspace</span>
+        <span className="block truncate text-[13px] font-medium leading-tight">{studioName}</span>
+        <span className="block truncate text-[11.5px] text-muted-foreground">{displayName}</span>
       </span>
       <ChevronRight className="size-4 text-muted-foreground" />
-    </div>
+    </Link>
   );
 }
