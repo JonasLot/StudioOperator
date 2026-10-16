@@ -102,16 +102,16 @@ function buildInput(job: Job, analysis: BriefView, gen: Generation, deliverable:
 }
 
 /** Compute QA for a job's completed outputs (one per selected/first-usable take per step). Read-only + deterministic. */
-export function jobQa(jobId: string): JobQa {
+export async function jobQa(jobId: string): Promise<JobQa> {
   const repo = getRepo();
-  const job = repo.getJob(jobId);
-  const analysis = getBrief(jobId);
-  const workflow = repo.getCurrentWorkflow(jobId);
-  const generations = repo.listGenerations(jobId);
+  const job = await repo.getJob(jobId);
+  const analysis = await getBrief(jobId);
+  const workflow = await repo.getCurrentWorkflow(jobId);
+  const generations = await repo.listGenerations(jobId);
   const limits = { perRepairMaxUsd: config.qa.perRepairMaxUsd, perJobRepairMaxUsd: config.qa.perJobRepairMaxUsd, maxAutoRepairsPerJob: config.qa.maxAutoRepairsPerJob };
   if (!job || !analysis || !workflow) return { outputs: [], overallVerdict: null, autoRepairable: 0, needsApproval: 0, limits };
 
-  const p = computeProfitability(job, workflow, generations, repo.listRevisions(jobId));
+  const p = computeProfitability(job, workflow, generations, await repo.listRevisions(jobId));
   const jobRepairSpentUsd = generations.filter((g) => g.revisionId).reduce((a, g) => a + generationSpend(g), 0);
   const autoRepairsSoFar = new Set(generations.filter((g) => g.revisionId).map((g) => g.revisionId)).size;
   const remainingCapUsd = (workflow.maxBudget ?? job.budget) - p.committedSpend;

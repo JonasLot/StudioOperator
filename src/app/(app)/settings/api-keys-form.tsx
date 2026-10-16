@@ -42,7 +42,7 @@ export function ApiKeysForm({ rows, enabled, durable }: { rows: KeyRow[]; enable
       {!durable ? (
         <p className="flex items-start gap-2 rounded-lg border bg-warn-soft px-3 py-2 text-[12.5px]">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-          <span>No remote database is configured (TURSO_DATABASE_URL), so saved keys live in temporary storage and can disappear on a redeploy or cold start.</span>
+          <span>No durable database is configured (set DATABASE_URL to a Postgres database), so saved keys live in temporary storage and can disappear on a redeploy or cold start.</span>
         </p>
       ) : null}
 

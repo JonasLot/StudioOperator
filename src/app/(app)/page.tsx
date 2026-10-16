@@ -6,15 +6,17 @@ import { Button } from "@/components/ui/button";
 import { JOB_STATUSES, type JobStatus } from "@/lib/domain/types";
 import { getDashboard } from "@/lib/services/studio";
 import { cn, usd } from "@/lib/utils";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage(props: PageProps<"/">) {
+  await loadRuntimeConfig();
   const sp = await props.searchParams;
   const status = typeof sp.status === "string" && (JOB_STATUSES as readonly string[]).includes(sp.status) ? (sp.status as JobStatus) : null;
   const q = typeof sp.q === "string" ? sp.q : "";
 
-  const rows = getDashboard();
+  const rows = await getDashboard();
   const active = rows.filter((r) => !["delivered", "rejected"].includes(r.job.status));
   const priced = active.filter((r) => r.stepCount > 0);
   const waiting = rows.reduce((a, r) => a + r.pendingApprovals.length, 0);

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import type { ApprovalKind } from "@/lib/domain/types";
 import { getRepo } from "@/lib/repo";
 import { cn, dateTime, usd } from "@/lib/utils";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,10 @@ const KIND_LABEL: Record<ApprovalKind, string> = {
 };
 
 export default async function ApprovalsPage() {
+  await loadRuntimeConfig();
   const repo = getRepo();
-  const jobs = new Map(repo.listJobs().map((j) => [j.id, j]));
-  const all = repo.listApprovals();
+  const jobs = new Map((await repo.listJobs()).map((j) => [j.id, j]));
+  const all = await repo.listApprovals();
   const pending = all.filter((a) => a.status === "pending");
   const byJob = [...new Set(pending.map((a) => a.jobId))].map((id) => ({ job: jobs.get(id)!, items: pending.filter((a) => a.jobId === id) }));
   const history = all

@@ -20,16 +20,18 @@ import { PendingApprovals } from "./pending-approvals";
 import { ProfitabilityPanel } from "./profitability-panel";
 import { RevisionsTab } from "./revisions-tab";
 import { WorkflowTab } from "./workflow-tab";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
 const TABS = ["brief", "decision", "workflow", "costs", "outputs", "revisions"] as const;
 
 export default async function JobPage(props: PageProps<"/jobs/[id]">) {
+  await loadRuntimeConfig();
   await ensureSeeded();
   const { id } = await props.params;
   const sp = await props.searchParams;
-  const bundle = getBundle(id);
+  const bundle = await getBundle(id);
   if (!bundle) notFound();
   const { job, analysis, intake, workflow, generations, revisions, approvals } = bundle;
   const p = profitabilityFor(bundle);

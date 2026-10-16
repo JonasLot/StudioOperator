@@ -8,10 +8,12 @@ import { MockModeForm } from "./mock-mode-form";
 import { Button } from "@/components/ui/button";
 import { astraLive, config, higgsfieldLive } from "@/lib/config";
 import { SOURCE_LABEL, type JobSource } from "@/lib/domain/types";
+import { storageKind } from "@/lib/repo";
 import { adminPasscode, secretStatus, storageIsDurable } from "@/lib/secrets";
 import { mockSetting, mockSettingSavedAt } from "@/lib/settings";
 import { MANUAL_MARKETPLACE_STEPS } from "@/lib/services/marketplace-policy";
 import { pct } from "@/lib/utils";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +38,8 @@ function Conn({ name, ok, detail }: { name: string; ok: boolean; detail: string 
   );
 }
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  await loadRuntimeConfig();
   const e = config.economics;
   // Only booleans about key presence are rendered — never key values.
   const astraKey = config.openai.apiKey.length > 0;
@@ -58,10 +61,22 @@ export default function SettingsPage() {
           <ul className="divide-y">
             <Conn name={`Brief analysis · ${config.openai.model}`} ok={astraLive()} detail={astraKey ? (astraLive() ? "Live" : "Key present · disabled by mock mode") : "No OpenAI API key · offline analyzer in use"} />
             <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No Higgsfield key · simulated provider in use"} />
-            {storageIsDurable() ? (
-              <Conn name="Database · Turso (remote)" ok detail="Durable: jobs, keys, profile and the mock-mode choice survive redeploys and are shared by every server instance." />
+            {storageKind() === "sqlite" ? (
+              <Conn
+                name={`Database · ${config.databasePath}`}
+                ok={!process.env.VERCEL}
+                detail={
+                  !process.env.VERCEL
+                    ? "Local SQLite file on this machine's disk."
+                    : "Temporary local storage. Anything saved here (jobs, keys, profile, mock mode) can disappear on a redeploy or cold start, and each server instance has its own copy. Set DATABASE_URL to a Postgres database (Vercel: Storage → Neon) to make it stick."
+                }
+              />
             ) : (
-              <Conn name={`Database · ${config.databasePath}`} ok={false} detail="Temporary local storage. Anything saved here (jobs, keys, profile, mock mode) can disappear on a redeploy or cold start, and each server instance has its own copy. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to make it stick." />
+              <Conn
+                name={`Database · ${storageKind() === "postgres" ? "Postgres" : "Turso (remote)"}`}
+                ok
+                detail="Durable: jobs, keys, profile and the mock-mode choice survive redeploys and are shared by every server instance."
+              />
             )}
           </ul>
           <Link href="/settings/connection-test" className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground hover:bg-accent/80">

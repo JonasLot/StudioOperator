@@ -1,5 +1,6 @@
 import "server-only";
 import { getRepo } from "@/lib/repo";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 import * as agency from "@/lib/services/agency";
 import { audit } from "@/lib/services/audit";
 import {
@@ -75,21 +76,21 @@ Deadline: 5 days. One revision round included.`,
 async function fastForward(jobId: string, until: (status: string) => boolean, maxRounds = 40) {
   const repo = getRepo();
   for (let i = 0; i < maxRounds; i++) {
-    const job = repo.getJob(jobId)!;
+    const job = (await repo.getJob(jobId))!;
     if (until(job.status)) return;
     // Back-date just past the mock render window so the mock completes this tick,
     // but not so far that the application-level polling timeout would trip.
-    for (const gen of repo.listGenerations(jobId).filter((x) => x.status === "queued" || x.status === "in_progress")) {
-      repo.updateGeneration(gen.id, { startedAt: new Date(Date.now() - 10_000).toISOString() });
+    for (const gen of (await repo.listGenerations(jobId)).filter((x) => x.status === "queued" || x.status === "in_progress")) {
+      await repo.updateGeneration(gen.id, { startedAt: new Date(Date.now() - 10_000).toISOString() });
     }
     await tick(jobId);
   }
 }
 
 /** The demo operator confirms any open rights flags (e.g. exact logos) before approving a plan. */
-function clearOpenRights(jobId: string) {
-  for (const a of getRepo().listApprovals(jobId).filter((x) => x.kind === "rights_clearance" && x.status === "pending")) {
-    clearRights(jobId, a.id, "Brand assets confirmed with the client.");
+async function clearOpenRights(jobId: string) {
+  for (const a of (await getRepo().listApprovals(jobId)).filter((x) => x.kind === "rights_clearance" && x.status === "pending")) {
+    await clearRights(jobId, a.id, "Brand assets confirmed with the client.");
   }
 }
 
@@ -103,37 +104,37 @@ function clearOpenRights(jobId: string) {
 async function superviseGlass(jobId: string) {
   const repo = getRepo();
   // 1. Intake — the single material missing question, then specific asset requests + a proposal.
-  agency.askClientQuestion(jobId, "Before we lock the look: should the monument read as cast (frosted) glass or clear float glass? It changes the reflections and the after-storm highlight.");
-  agency.runIntakeConversation(jobId);
-  agency.sendProposal(jobId);
+  await agency.askClientQuestion(jobId, "Before we lock the look: should the monument read as cast (frosted) glass or clear float glass? It changes the reflections and the after-storm highlight.");
+  await agency.runIntakeConversation(jobId);
+  await agency.sendProposal(jobId);
   // 2. Present concepts for the client's call.
-  agency.presentConcept(jobId, { changed: "locked the storm → clear arc on approved keyframes and kept the monument consistent across shots", decisionNeeded: "pick the hero keyframe for the final reveal" });
+  await agency.presentConcept(jobId, { changed: "locked the storm → clear arc on approved keyframes and kept the monument consistent across shots", decisionNeeded: "pick the hero keyframe for the final reveal" });
   // 3. A real-milestone progress update.
-  agency.sendProgressUpdate(jobId, "keyframes_approved");
+  await agency.sendProgressUpdate(jobId, "keyframes_approved");
   // 4. Supervised self-repair on the QA pass — auto-fix within the spend limits.
   await agency.applySelfRepairs(jobId);
   await fastForward(jobId, (s) => s === "qa");
-  agency.sendProgressUpdate(jobId, "qa_passed");
+  await agency.sendProgressUpdate(jobId, "qa_passed");
   // 5. Client revision — warmer, more hopeful reveal → interpreted as an included finishing edit.
   const note = "Make the final reveal warmer and more hopeful.";
-  agency.replyToRevision(jobId, note, 2, "D1");
-  const revId = addRevision(jobId, note, "D1");
-  const rev = repo.getRevision(revId);
+  await agency.replyToRevision(jobId, note, 2, "D1");
+  const revId = await addRevision(jobId, note, "D1");
+  const rev = await repo.getRevision(revId);
   if (rev && rev.approvalStatus === "approved" && rev.modelId) {
     await runRevision(jobId, revId);
     await fastForward(jobId, (s) => s === "qa");
   }
-  agency.sendProgressUpdate(jobId, "revision_complete");
+  await agency.sendProgressUpdate(jobId, "revision_complete");
   // Select the finished masters so a delivery package exists.
-  for (const g of repo.listGenerations(jobId).filter((x) => x.status === "completed")) {
-    const step = repo.getCurrentWorkflow(jobId)?.steps.find((s) => s.id === g.stepId);
-    if (step && (step.category === "finishing" || step.category === "video") && !repo.listGenerations(jobId).some((x) => x.stepId === g.stepId && x.selected)) {
-      repo.updateGeneration(g.id, { selected: true });
+  for (const g of (await repo.listGenerations(jobId)).filter((x) => x.status === "completed")) {
+    const step = (await repo.getCurrentWorkflow(jobId))?.steps.find((s) => s.id === g.stepId);
+    if (step && (step.category === "finishing" || step.category === "video") && !(await repo.listGenerations(jobId)).some((x) => x.stepId === g.stepId && x.selected)) {
+      await repo.updateGeneration(g.id, { selected: true });
     }
   }
   // 6. Delivery package drafted — held for your approval (final delivery always needs you).
-  agency.draftDelivery(jobId);
-  agency.evaluatePauses(jobId);
+  await agency.draftDelivery(jobId);
+  await agency.evaluatePauses(jobId);
 }
 
 /**
@@ -143,29 +144,29 @@ async function superviseGlass(jobId: string) {
  */
 async function superviseOrchard(jobId: string) {
   const repo = getRepo();
-  audit({
+  await audit({
     jobId,
     kind: "decision",
     summary: "Route comparison for the orbit: Kling O3 image-reference vs Cinema Studio.",
     detail: "Chose Kling O3 image-reference — it holds spatial continuity and low-light detail through a slow orbit at roughly half the per-shot cost. Cinema Studio is reserved for cinematic lensing this piece does not need.",
   });
-  agency.escalate(
+  await agency.escalate(
     jobId,
     "spend_limit",
     "Premium motion route needs your approval",
     "The Cinema Studio route for the orbit would exceed the per-job automatic-spend limit.",
     "Keep the Kling O3 image-reference route (recommended) or approve a higher cap for Cinema Studio.",
   );
-  agency.sendProgressUpdate(jobId, "qa_passed");
+  await agency.sendProgressUpdate(jobId, "qa_passed");
   await agency.applySelfRepairs(jobId);
   await fastForward(jobId, (s) => s === "qa");
-  for (const g of repo.listGenerations(jobId).filter((x) => x.status === "completed")) {
-    const step = repo.getCurrentWorkflow(jobId)?.steps.find((s) => s.id === g.stepId);
-    if (step && (step.category === "finishing" || step.category === "video") && !repo.listGenerations(jobId).some((x) => x.stepId === g.stepId && x.selected)) {
-      repo.updateGeneration(g.id, { selected: true });
+  for (const g of (await repo.listGenerations(jobId)).filter((x) => x.status === "completed")) {
+    const step = (await repo.getCurrentWorkflow(jobId))?.steps.find((s) => s.id === g.stepId);
+    if (step && (step.category === "finishing" || step.category === "video") && !(await repo.listGenerations(jobId)).some((x) => x.stepId === g.stepId && x.selected)) {
+      await repo.updateGeneration(g.id, { selected: true });
     }
   }
-  agency.draftDelivery(jobId);
+  await agency.draftDelivery(jobId);
 }
 
 export async function seedDemo() {
@@ -182,15 +183,15 @@ export async function seedDemo() {
     clientNotes: "Repeat client potential — they run a winter campaign every year. Hiring manager: Ingrid.",
     referenceAssets: ["northlight-polar-lookbook.pdf", "https://example.com/northlight/moodboard"],
   });
-  clearOpenRights(aurora);
-  approveInitialWorkflow(aurora, repo.getCurrentWorkflow(aurora)!.maxBudget);
+  await clearOpenRights(aurora);
+  await approveInitialWorkflow(aurora, (await repo.getCurrentWorkflow(aurora))!.maxBudget);
   await startProduction(aurora);
   await fastForward(aurora, (s) => s === "qa");
-  const r1 = addRevision(aurora, "The end card logo feels too small — make the wordmark larger and check the tagline spelling.", "D1");
+  const r1 = await addRevision(aurora, "The end card logo feels too small — make the wordmark larger and check the tagline spelling.", "D1");
   await runRevision(aurora, r1);
   await fastForward(aurora, (s) => s === "qa");
-  addRevision(aurora, "Can the aurora shot at 0:22 be warmer? Push the grade toward amber a little.", "D1");
-  addRevision(aurora, "We'd also need a 6s bumper version for YouTube pre-roll.", null);
+  await addRevision(aurora, "Can the aurora shot at 0:22 be warmer? Push the grade toward amber a little.", "D1");
+  await addRevision(aurora, "We'd also need a 6s bumper version for YouTube pre-roll.", null);
 
   // 2. Short contrasting brief — needs review for rights.
   await createJob({
@@ -215,8 +216,8 @@ export async function seedDemo() {
     clientNotes: "Came in via the contact form. Wants invoice in NOK.",
     referenceAssets: ["fjord-coffee-ss25-shoot.zip"],
   });
-  clearOpenRights(coffee);
-  approveInitialWorkflow(coffee, repo.getCurrentWorkflow(coffee)!.maxBudget);
+  await clearOpenRights(coffee);
+  await approveInitialWorkflow(coffee, (await repo.getCurrentWorkflow(coffee))!.maxBudget);
 
   // 4. Hard stop — rejected automatically.
   await createJob({
@@ -241,12 +242,12 @@ export async function seedDemo() {
     clientNotes: null,
     referenceAssets: ["https://example.com/signal-noise/s3"],
   });
-  const pRights = repo.listApprovals(podcast).find((a) => a.kind === "rights_clearance" && a.status === "pending");
-  if (pRights) clearRights(podcast, pRights.id, "Reviewed");
-  approveInitialWorkflow(podcast, repo.getCurrentWorkflow(podcast)!.maxBudget);
+  const pRights = (await repo.listApprovals(podcast)).find((a) => a.kind === "rights_clearance" && a.status === "pending");
+  if (pRights) await clearRights(podcast, pRights.id, "Reviewed");
+  await approveInitialWorkflow(podcast, (await repo.getCurrentWorkflow(podcast))!.maxBudget);
   await startProduction(podcast);
   await fastForward(podcast, (s) => s === "qa");
-  approveFinalDelivery(podcast, "Delivered manually on Contra.");
+  await approveFinalDelivery(podcast, "Delivered manually on Contra.");
 
   // --- Demo 1: After the Rain: Glass Monument (the main showcase) ---
   const glass = await createJob({
@@ -266,8 +267,8 @@ export async function seedDemo() {
     ],
     templateId: "launch-video",
   });
-  clearOpenRights(glass);
-  approveInitialWorkflow(glass, repo.getCurrentWorkflow(glass)!.maxBudget);
+  await clearOpenRights(glass);
+  await approveInitialWorkflow(glass, (await repo.getCurrentWorkflow(glass))!.maxBudget);
   await startProduction(glass);
   await fastForward(glass, (s) => s === "qa");
 
@@ -282,14 +283,14 @@ export async function seedDemo() {
     clientNotes: "Atmospheric spec piece. Client supplies the approved orchard keyframe.",
     referenceAssets: ["orchard-world-keyframe.png", "low-light-palette.png", "orbit-camera-direction.pdf", "pacing-reference.mp4"],
   });
-  clearOpenRights(orchard);
-  approveInitialWorkflow(orchard, repo.getCurrentWorkflow(orchard)!.maxBudget);
+  await clearOpenRights(orchard);
+  await approveInitialWorkflow(orchard, (await repo.getCurrentWorkflow(orchard))!.maxBudget);
   await startProduction(orchard);
   await fastForward(orchard, (s) => s === "qa");
 
   // --- Supervised autonomy: settings, client memory, and the two demo runs ---
-  agency.getAutonomy(); // ensure the single account-level settings row exists
-  agency.upsertClientMemory({
+  await agency.getAutonomy(); // ensure the single account-level settings row exists
+  await agency.upsertClientMemory({
     displayName: "Glasverk Studio",
     colors: ["#0b1f2a", "#9fd8e6"],
     fonts: ["Söhne", "GT Sectra"],
@@ -301,7 +302,7 @@ export async function seedDemo() {
     deliveryPreferences: "4K masters, both 9:16 and 16:9",
     communicationPreferences: "Email · concise updates at real milestones",
   });
-  agency.upsertClientMemory({
+  await agency.upsertClientMemory({
     displayName: "Lumen Films",
     colors: ["#0a0d12", "#1b2a3a"],
     tone: "atmospheric, low-light, unhurried",
@@ -317,7 +318,7 @@ export async function seedDemo() {
   // 6. Fresh lead, not yet analysed.
   const libraryId = `job_seedlibrary${Date.now().toString(36).slice(-4)}`;
   const t = new Date().toISOString();
-  repo.insertJob({
+  await repo.insertJob({
     id: libraryId,
     title: "Vestland library — times of day",
     source: "direct",
@@ -336,16 +337,17 @@ export async function seedDemo() {
     createdAt: t,
     updatedAt: t,
   });
-  repo.insertActivity({ id: `ev_seed${Date.now()}`, jobId: libraryId, actor: "operator", message: "Lead pasted from direct email. Not analysed yet.", createdAt: t });
+  await repo.insertActivity({ id: `ev_seed${Date.now()}`, jobId: libraryId, actor: "operator", message: "Lead pasted from direct email. Not analysed yet.", createdAt: t });
 }
 
 const g = globalThis as unknown as { __studioSeed?: Promise<void> };
 
-export function ensureSeeded() {
+export async function ensureSeeded() {
+  await loadRuntimeConfig();
   if (!g.__studioSeed) {
     g.__studioSeed = (async () => {
       try {
-        if (getRepo().countJobs() === 0) await seedDemo();
+        if (await getRepo().countJobs() === 0) await seedDemo();
       } catch (err) {
         // Seeding is best-effort demo data — never let a partial seed take down
         // the whole app (e.g. when a provider cannot complete generations).
@@ -357,7 +359,7 @@ export function ensureSeeded() {
 }
 
 export async function resetDemo() {
-  getRepo().wipe();
+  await getRepo().wipe();
   g.__studioSeed = seedDemo();
   await g.__studioSeed;
 }

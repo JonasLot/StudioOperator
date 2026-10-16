@@ -63,9 +63,9 @@ export async function runIntakeAnalysis(job: Job): Promise<IntakeAnalysis> {
     createdAt: now(),
   };
   const repo = getRepo();
-  repo.insertIntakeAnalysis(record);
-  if (warning) repo.insertActivity({ id: newId("ev"), jobId: job.id, actor: "system", message: warning, createdAt: now() });
-  repo.insertActivity({
+  await repo.insertIntakeAnalysis(record);
+  if (warning) await repo.insertActivity({ id: newId("ev"), jobId: job.id, actor: "system", message: warning, createdAt: now() });
+  await repo.insertActivity({
     id: newId("ev"),
     jobId: job.id,
     actor: "agent",
@@ -75,8 +75,8 @@ export async function runIntakeAnalysis(job: Job): Promise<IntakeAnalysis> {
   return record;
 }
 
-export function getIntake(jobId: string): IntakeAnalysis | null {
-  return getRepo().getLatestIntakeAnalysis(jobId);
+export async function getIntake(jobId: string): Promise<IntakeAnalysis | null> {
+  return await getRepo().getLatestIntakeAnalysis(jobId);
 }
 
 /** The effective analysis a human would act on: their edits if present, else the model's. */
@@ -97,8 +97,8 @@ export function briefView(record: IntakeAnalysis): BriefView {
   };
 }
 
-export function getBrief(jobId: string): BriefView | null {
-  const record = getRepo().getLatestIntakeAnalysis(jobId);
+export async function getBrief(jobId: string): Promise<BriefView | null> {
+  const record = await getRepo().getLatestIntakeAnalysis(jobId);
   return record ? briefView(record) : null;
 }
 
@@ -114,10 +114,10 @@ export interface ReviewInput {
  * `changed` tells the caller whether the effective analysis differs, so the plan
  * can be rebuilt from it (see studio.replanFromIntake).
  */
-export function reviewIntake(jobId: string, input: ReviewInput) {
+export async function reviewIntake(jobId: string, input: ReviewInput) {
   const repo = getRepo();
-  const job = repo.getJob(jobId);
-  const record = repo.getLatestIntakeAnalysis(jobId);
+  const job = await repo.getJob(jobId);
+  const record = await repo.getLatestIntakeAnalysis(jobId);
   if (!job || !record) throw new Error("No intake analysis to review.");
 
   const changed = JSON.stringify(input.edited) !== JSON.stringify(effectiveAnalysis(record));
@@ -125,8 +125,8 @@ export function reviewIntake(jobId: string, input: ReviewInput) {
   const reviewer = input.reviewer ?? config.operatorName;
   const reviewStatus = input.action === "approve" ? "approved" : input.action === "reject" ? "rejected" : "pending";
 
-  repo.transaction(() => {
-    repo.updateIntakeAnalysis(record.id, {
+  await repo.transaction(async () => {
+    await repo.updateIntakeAnalysis(record.id, {
       edited: input.edited,
       decision,
       decisionReasons: reasons,
@@ -136,13 +136,13 @@ export function reviewIntake(jobId: string, input: ReviewInput) {
       reviewedAt: input.action === "save" ? record.reviewedAt : now(),
     });
     const verb = input.action === "approve" ? "approved" : input.action === "reject" ? "rejected" : "saved edits to";
-    repo.insertActivity({ id: newId("ev"), jobId, actor: "operator", message: `${reviewer} ${verb} the intake analysis (decision: ${decision}).`, createdAt: now() });
+    await repo.insertActivity({ id: newId("ev"), jobId, actor: "operator", message: `${reviewer} ${verb} the intake analysis (decision: ${decision}).`, createdAt: now() });
 
     if (input.action === "reject") {
-      repo.updateJob(jobId, { status: "rejected" });
-      repo.insertActivity({ id: newId("ev"), jobId, actor: "operator", message: "Job rejected from analysis review. Decline it on the marketplace too.", createdAt: now() });
+      await repo.updateJob(jobId, { status: "rejected" });
+      await repo.insertActivity({ id: newId("ev"), jobId, actor: "operator", message: "Job rejected from analysis review. Decline it on the marketplace too.", createdAt: now() });
     } else if (input.action === "approve" && job.status === "new") {
-      repo.updateJob(jobId, { status: "needs_review" });
+      await repo.updateJob(jobId, { status: "needs_review" });
     }
   });
 

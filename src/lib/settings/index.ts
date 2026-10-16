@@ -14,29 +14,35 @@ type Entry = { value: string; updatedAt: string };
 type Snapshot = { at: number; values: Map<string, Entry> };
 const g = globalThis as unknown as { __studioSettings?: Snapshot };
 
-// One query loads every setting, so a page that reads the profile, the mock-mode override and
-// more costs a single round trip per TTL instead of one per key.
-function snapshot(): Map<string, Entry> {
+/** What is currently cached; a synchronous read, so config getters can use it. See refreshSettings(). */
+const snapshot = (): Map<string, Entry> => g.__studioSettings?.values ?? new Map();
+
+/**
+ * Reload every setting with one query when the cache is older than the TTL. The database is async, but
+ * `config.mockMode` and friends are synchronous getters, so every entry point (page, server action)
+ * calls this once first (see loadRuntimeConfig); the getters then read the cache.
+ *
+ * A failed read must not look like "nothing is set": that would flip a saved Live choice back to mock.
+ * It keeps the last good values and retries on the next call.
+ */
+export async function refreshSettings(): Promise<void> {
   const hit = g.__studioSettings;
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.values;
+  if (hit && Date.now() - hit.at < TTL_MS) return;
   try {
     const values = new Map<string, Entry>();
-    for (const row of getRepo().listSettings()) values.set(row.key, { value: row.value, updatedAt: row.updatedAt });
+    for (const row of await getRepo().listSettings()) values.set(row.key, { value: row.value, updatedAt: row.updatedAt });
     g.__studioSettings = { at: Date.now(), values };
-    return values;
   } catch {
-    // A failed read must not look like "nothing is set": that would flip a saved Live choice back to mock.
-    // Keep serving the last good values (or none yet) and try again on the next call instead of caching the failure.
-    return hit?.values ?? new Map();
+    /* keep serving the last good values */
   }
 }
 
 const read = (key: string): string | null => snapshot().get(key)?.value ?? null;
 
-function write(key: string, value: string | null) {
+async function write(key: string, value: string | null) {
   const repo = getRepo();
-  if (value === null) repo.deleteSetting(key);
-  else repo.setSetting(key, value);
+  if (value === null) await repo.deleteSetting(key);
+  else await repo.setSetting(key, value);
   const values = new Map(snapshot());
   if (value === null) values.delete(key);
   else values.set(key, { value, updatedAt: new Date().toISOString() });
@@ -48,8 +54,8 @@ function write(key: string, value: string | null) {
 export function mockSetting(): MockSetting | null {
   return parseMockSetting(read("mockMode"));
 }
-export function setMockSetting(value: MockSetting | null) {
-  write("mockMode", value);
+export async function setMockSetting(value: MockSetting | null) {
+  await write("mockMode", value);
 }
 /** When the mock-mode choice was stored in the database, or null when nothing is stored. */
 export const mockSettingSavedAt = (): string | null => snapshot().get("mockMode")?.updatedAt ?? null;
@@ -77,8 +83,8 @@ export function getProfile(): Profile & { saved: boolean } {
   }
 }
 
-export function saveProfile(profile: Profile) {
-  write("profile", JSON.stringify(profile));
+export async function saveProfile(profile: Profile) {
+  await write("profile", JSON.stringify(profile));
 }
 
 /** The name approvals and audit entries are recorded under. */

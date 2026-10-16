@@ -6,15 +6,17 @@ import { getRepo } from "@/lib/repo";
 import { authEnabled } from "@/lib/auth";
 import { ensureSeeded } from "@/lib/seed";
 import { getProfile } from "@/lib/settings";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 // Every screen reads the live database and the layout seeds it on first use, so
 // nothing is statically prerendered — this also keeps `next build` from opening a
 // database connection (e.g. the not-found page) before env vars point anywhere real.
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
+  await loadRuntimeConfig();
   await ensureSeeded();
   const cfg = publicConfig();
-  const approvals = getRepo().countPendingApprovals();
+  const approvals = await getRepo().countPendingApprovals();
   const profile = getProfile();
   const loginOn = authEnabled();
   const live = `Live · Astra ${cfg.astraLive ? "on" : "off"} · Higgsfield ${cfg.higgsfieldLive ? "on" : "off"}`;

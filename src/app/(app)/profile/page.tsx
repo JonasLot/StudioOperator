@@ -8,6 +8,7 @@ import { storageIsDurable } from "@/lib/secrets";
 import { getProfile } from "@/lib/settings";
 import { initials } from "@/lib/settings/rules";
 import { ProfileForm } from "./profile-form";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 const when = (seconds: number) => new Date(seconds * 1000).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 export default async function ProfilePage() {
+  await loadRuntimeConfig();
   const profile = getProfile();
   const loginOn = authEnabled();
   const session = await currentSession();
@@ -45,7 +47,7 @@ export default async function ProfilePage() {
           {!storageIsDurable() ? (
             <p className="mb-4 flex items-start gap-2 rounded-lg border bg-warn-soft px-3 py-2 text-[12.5px]">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-              <span>No remote database is configured (TURSO_DATABASE_URL), so the profile lives in temporary storage and can reset on a redeploy.</span>
+              <span>No durable database is configured (set DATABASE_URL to a Postgres database), so the profile lives in temporary storage and can reset on a redeploy.</span>
             </p>
           ) : null}
           <ProfileForm defaults={{ displayName: profile.displayName, studioName: profile.studioName, email: profile.email }} />

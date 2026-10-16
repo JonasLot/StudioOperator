@@ -29,8 +29,8 @@ export function MockModeForm({ current, mockMode, passcodeConfigured, envLabel, 
         <p className="flex items-start gap-2 rounded-lg border bg-warn-soft px-3 py-2 text-[12.5px]">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
           <span>
-            This choice is stored in the database, and no remote database is configured (TURSO_DATABASE_URL). On Vercel that means temporary storage: the mode can fall back to the default after a cold start,
-            and different server instances can disagree. Connect Turso to make it stick.
+            This choice is stored in the database, and no durable database is configured (set DATABASE_URL to a Postgres database). On Vercel that means temporary storage: the mode can fall back to the default after a cold start,
+            and different server instances can disagree. Connect a database to make it stick.
           </span>
         </p>
       ) : null}

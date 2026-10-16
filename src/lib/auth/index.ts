@@ -57,9 +57,9 @@ async function attemptKey(): Promise<string> {
   return `login:${createHash("sha256").update(ip).digest("hex").slice(0, 16)}`;
 }
 
-function readAttempts(key: string): AttemptState | null {
+async function readAttempts(key: string): Promise<AttemptState | null> {
   try {
-    const raw = getRepo().getSetting(key);
+    const raw = await getRepo().getSetting(key);
     return raw ? (JSON.parse(raw) as AttemptState) : null;
   } catch {
     return null;
@@ -68,13 +68,13 @@ function readAttempts(key: string): AttemptState | null {
 
 /** Milliseconds this client must wait before trying again; 0 when allowed. */
 export async function loginBlockedForMs(): Promise<number> {
-  return blockedForMs(readAttempts(await attemptKey()), Date.now());
+  return blockedForMs(await readAttempts(await attemptKey()), Date.now());
 }
 
 export async function recordLoginFailure(): Promise<void> {
   const key = await attemptKey();
   try {
-    getRepo().setSetting(key, JSON.stringify(afterFailure(readAttempts(key), Date.now())));
+    await getRepo().setSetting(key, JSON.stringify(afterFailure(await readAttempts(key), Date.now())));
   } catch {
     /* throttling is best-effort; the response delay still applies */
   }
@@ -82,7 +82,7 @@ export async function recordLoginFailure(): Promise<void> {
 
 export async function clearLoginFailures(): Promise<void> {
   try {
-    getRepo().deleteSetting(await attemptKey());
+    await getRepo().deleteSetting(await attemptKey());
   } catch {
     /* nothing to clear */
   }

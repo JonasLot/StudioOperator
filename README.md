@@ -30,9 +30,22 @@ Mock mode is the default, so the live demo needs no API keys.
 ## Persisting jobs in production
 
 On Vercel the SQLite file lives in `/tmp`, which is wiped on cold starts and not shared between
-serverless instances — so new jobs don't survive. To make jobs durable, point the app at a
-[Turso](https://turso.tech) (libSQL) database. The same portable `schema.sql` and SQL are reused;
-the only change is the driver, selected automatically when `TURSO_DATABASE_URL` is set.
+serverless instances — so jobs, saved keys, the profile and the Live/mock choice do not survive.
+Point the app at a real database instead. The backend is picked automatically, in this order:
+
+1. **Postgres** — set `DATABASE_URL` (or `POSTGRES_URL`). Recommended.
+2. **Turso / libSQL** — set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+3. A local **SQLite** file (`DATABASE_PATH`, default `./data/studio.db`) — right for local use or a host with a disk.
+
+All three run the same repository code and the same portable schema; tables are created on first start.
+
+**Postgres on Vercel (about two minutes):** open the project's **Storage** tab, create a **Neon** database
+(Marketplace) and connect it to the project. Vercel adds `DATABASE_URL` / `POSTGRES_URL` to the environment by
+itself; redeploy, and Settings → Connections should read *Database · Postgres*. Any other Postgres works too
+(Supabase, RDS, a local server): paste its connection string into `DATABASE_URL`. Pick a region near your
+Vercel functions.
+
+**Turso:**
 
 ```bash
 turso db create studio-operator
@@ -40,12 +53,9 @@ turso db show studio-operator --url          # -> TURSO_DATABASE_URL
 turso db tokens create studio-operator       # -> TURSO_AUTH_TOKEN
 ```
 
-Set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the Vercel project's Environment Variables and
-redeploy. Locally, with neither set, the app keeps using the SQLite file — no code changes needed.
-
-Alternatively, deploy to a host with a persistent disk (Render, Railway, Fly.io) and point
-`DATABASE_PATH` at the mounted volume; the local SQLite driver then persists jobs as-is. For a full
-SQL database, implement the `StudioRepository` interface against Postgres (see **Architecture**).
+The repository interface is async (`src/lib/repo/repository.ts`), the SQL lives in
+`src/lib/repo/sql-repository.ts`, and each database has a small driver in `src/lib/repo/drivers/`. Adding another
+database means writing one more `SqlDriver`.
 
 ## Sign-in, profile and mock mode
 
@@ -191,7 +201,7 @@ All checks run server-side; the UI only reflects them.
 ## Architecture
 
 - **Next.js 16 (App Router) + TypeScript, Tailwind v4, shadcn/ui (vendored in `src/components/ui`), Lucide.**
-- **Persistence**: `StudioRepository` interface (`src/lib/repo/repository.ts`) with a SQLite implementation (`better-sqlite3`). `schema.sql` is portable; implement the interface for Postgres and swap it in `src/lib/repo/index.ts`.
+- **Persistence**: an async `StudioRepository` interface (`src/lib/repo/repository.ts`) implemented once in SQL (`sql-repository.ts`) over a small `SqlDriver` per database — Postgres (`pg`), Turso/libSQL, or a local SQLite file (`better-sqlite3`). `schema.sql` is portable and is applied once per schema version.
 - **Secrets**: read only in `src/lib/config.ts` (`server-only`). The browser receives a `publicConfig()` without keys.
 - **Providers**:
   - `src/lib/analysis/astra.ts` — Astra via the OpenAI Responses API with Structured Outputs, validated with zod; falls back to the offline analyzer (`mock.ts`) and logs a warning if the call fails.

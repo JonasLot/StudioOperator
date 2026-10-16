@@ -4,18 +4,22 @@ import { StatusPill } from "@/components/job-pipeline";
 import { PageHeader } from "@/components/page-header";
 import { getModel } from "@/lib/higgsfield/catalog";
 import { getRepo } from "@/lib/repo";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function OutputsPage() {
+  await loadRuntimeConfig();
   const repo = getRepo();
-  const jobs = repo.listJobs();
-  const sections = jobs
-    .map((job) => {
-      const gens = repo.listGenerations(job.id).filter((g) => g.status === "completed" && g.outputUrl);
-      return { job, selected: gens.filter((g) => g.selected), total: gens.length };
-    })
-    .filter((s) => s.total > 0);
+  const jobs = await repo.listJobs();
+  const sections = (
+    await Promise.all(
+      jobs.map(async (job) => {
+        const gens = (await repo.listGenerations(job.id)).filter((g) => g.status === "completed" && g.outputUrl);
+        return { job, selected: gens.filter((g) => g.selected), total: gens.length };
+      }),
+    )
+  ).filter((s) => s.total > 0);
 
   return (
     <div className="flex flex-col gap-10">

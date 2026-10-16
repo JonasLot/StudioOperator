@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { byRole, ROLE_META, ROUTER_ROLES } from "@/lib/router/catalog";
 import { usd } from "@/lib/utils";
 import { RouterStudio } from "./router-studio";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,8 @@ const ROLE_ACCENT: Record<string, string> = {
   finish: "text-ok",
 };
 
-export default function ModelsPage() {
+export default async function ModelsPage() {
+  await loadRuntimeConfig();
   return (
     <div className="flex flex-col gap-10">
       <PageHeader

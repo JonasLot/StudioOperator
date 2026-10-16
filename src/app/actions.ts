@@ -16,11 +16,19 @@ import { mockSetting, saveProfile, setMockSetting } from "@/lib/settings";
 import { parseMockSetting, validateProfile, type Profile } from "@/lib/settings/rules";
 import { SECRET_DEFS, SECRET_NAMES, adminPasscode, saveSecrets, verifyAdminPasscode, type SecretName } from "@/lib/secrets";
 
+import { loadRuntimeConfig } from "@/lib/runtime-config";
+
+/** Every action: must be signed in, and sees current saved settings and keys. */
+async function guard() {
+  await requireSession();
+  await loadRuntimeConfig();
+}
+
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
 async function run(jobId: string | null, fn: () => unknown | Promise<unknown>, message?: string): Promise<ActionResult> {
   try {
-    await requireSession();
+    await guard();
     await fn();
     revalidatePath("/");
     if (jobId) revalidatePath(`/jobs/${jobId}`);
@@ -47,7 +55,7 @@ const NewJobSchema = z.object({
 export type NewJobState = { error?: string; fieldErrors?: Record<string, string[] | undefined> } | undefined;
 
 export async function createJobAction(_prev: NewJobState, form: FormData): Promise<NewJobState> {
-  await requireSession();
+  await guard();
   const parsed = NewJobSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: "Check the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors };
   const d = parsed.data;
@@ -120,7 +128,7 @@ export async function retryGenerationAction(jobId: string, generationId: string)
   return run(jobId, () => studio.retryGeneration(jobId, generationId), "Retrying as a new attempt.");
 }
 export async function connectionTestAction(): Promise<ActionResult & { detail?: string; providerName?: string; live?: boolean }> {
-  await requireSession();
+  await guard();
   const r = await studio.providerConnectionTest();
   return r.ok ? { ok: true, message: r.detail, detail: r.detail, providerName: r.name, live: r.live } : { ok: false, error: r.detail, detail: r.detail, providerName: r.name, live: r.live };
 }
@@ -134,15 +142,15 @@ export async function approveDeliveryAction(jobId: string, attestation: string) 
   return run(jobId, () => studio.approveFinalDelivery(jobId, attestation), "Final delivery approved.");
 }
 export async function reviewIntakeAction(jobId: string, edited: Analysis, action: "save" | "approve" | "reject"): Promise<ActionResult> {
-  await requireSession();
+  await guard();
   const parsed = safeParseAnalysis(edited);
   if (!parsed.ok) return { ok: false, error: `Analysis is invalid: ${parsed.error}` };
   return run(
     jobId,
-    () => {
-      const result = intake.reviewIntake(jobId, { edited: parsed.analysis, action });
+    async () => {
+      const result = await intake.reviewIntake(jobId, { edited: parsed.analysis, action });
       // Edits change what was costed, so rebuild the plan from them (no-op once a workflow is approved).
-      if (result.changed && action !== "reject") studio.replanAfterReview(jobId);
+      if (result.changed && action !== "reject") await studio.replanAfterReview(jobId);
       return result;
     },
     action === "approve" ? "Analysis approved." : action === "reject" ? "Job rejected." : "Edits saved.",
@@ -150,14 +158,14 @@ export async function reviewIntakeAction(jobId: string, edited: Analysis, action
 }
 
 export async function resetDemoAction() {
-  await requireSession();
+  await guard();
   await resetDemo();
   revalidatePath("/", "layout");
   redirect("/");
 }
 
 export async function resetDemoToPresentAction() {
-  await requireSession();
+  await guard();
   await resetDemo();
   revalidatePath("/", "layout");
   redirect("/present");
@@ -180,7 +188,7 @@ const AUTONOMY_MESSAGE_TYPES = [
 export type AutonomyState = { error?: string; ok?: boolean } | undefined;
 
 export async function saveAutonomyAction(_prev: AutonomyState, form: FormData): Promise<AutonomyState> {
-  await requireSession();
+  await guard();
   const num = (k: string, d: number) => {
     const n = Number(form.get(k));
     return Number.isFinite(n) && n >= 0 ? n : d;
@@ -189,7 +197,7 @@ export async function saveAutonomyAction(_prev: AutonomyState, form: FormData): 
     const alwaysPause = Object.fromEntries(
       PAUSE_CONDITIONS.map((c) => [c, form.get(`pause_${c}`) === "on"]),
     ) as Record<PauseCondition, boolean>;
-    agency.saveAutonomy({
+    await agency.saveAutonomy({
       maxAutoSpendPerJobUsd: num("maxAutoSpendPerJobUsd", 60),
       maxAutoSpendPerRepairUsd: num("maxAutoSpendPerRepairUsd", 8),
       maxAttemptsPerStep: num("maxAttemptsPerStep", 16),
@@ -215,7 +223,7 @@ export type ApiKeysState = { ok?: true; message?: string; error?: string } | und
  * back or logged; the result only names which keys changed.
  */
 export async function saveApiKeysAction(_prev: ApiKeysState, form: FormData): Promise<ApiKeysState> {
-  await requireSession();
+  await guard();
   if (!adminPasscode()) {
     return { error: "Saving keys here is switched off: set ADMIN_PASSCODE (12+ characters) in the server environment and redeploy." };
   }
@@ -232,7 +240,7 @@ export async function saveApiKeysAction(_prev: ApiKeysState, form: FormData): Pr
   }
   if (!Object.keys(updates).length && !remove.length) return { error: "Nothing to save — paste a key, or tick one to remove." };
   try {
-    const r = saveSecrets(updates, remove);
+    const r = await saveSecrets(updates, remove);
     if (!r.ok) return { error: r.error };
     revalidatePath("/", "layout");
     const parts = [
@@ -274,7 +282,7 @@ export async function logoutAction() {
 export type ProfileState = { ok?: true; message?: string; error?: string; fieldErrors?: Partial<Record<keyof Profile, string>>; values?: Profile } | undefined;
 
 export async function saveProfileAction(_prev: ProfileState, form: FormData): Promise<ProfileState> {
-  await requireSession();
+  await guard();
   const parsed = validateProfile({ displayName: form.get("displayName"), studioName: form.get("studioName"), email: form.get("email") });
   if (!parsed.ok) {
     // Hand the typed values back so the form keeps them next to the errors.
@@ -282,7 +290,7 @@ export async function saveProfileAction(_prev: ProfileState, form: FormData): Pr
     return { error: "Check the highlighted fields.", fieldErrors: parsed.errors, values: { displayName: text("displayName"), studioName: text("studioName"), email: text("email") } };
   }
   try {
-    saveProfile(parsed.value);
+    await saveProfile(parsed.value);
   } catch (err) {
     console.error("Saving profile failed:", (err as Error).name);
     return { error: "Could not save the profile. Check that the database is reachable." };
@@ -300,7 +308,7 @@ export type MockModeState = { ok?: true; message?: string; error?: string } | un
  * or back to following the environment, needs the admin passcode because it can start real spend.
  */
 export async function setMockModeAction(_prev: MockModeState, form: FormData): Promise<MockModeState> {
-  await requireSession();
+  await guard();
   const choice = String(form.get("mode") ?? "");
   if (choice !== "mock" && choice !== "live" && choice !== "default") return { error: "Pick a mode." };
   if (choice !== "mock") {
@@ -311,7 +319,7 @@ export async function setMockModeAction(_prev: MockModeState, form: FormData): P
     }
   }
   try {
-    setMockSetting(choice === "default" ? null : parseMockSetting(choice));
+    await setMockSetting(choice === "default" ? null : parseMockSetting(choice));
   } catch (err) {
     console.error("Saving mock mode failed:", (err as Error).name);
     return { error: "Could not save the setting. Check that the database is reachable." };

@@ -3,10 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { publicConfig } from "@/lib/config";
 import { PageHeader } from "@/components/page-header";
 import { NewJobForm } from "./new-job-form";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
-export default function NewJobPage() {
+export default async function NewJobPage() {
+  await loadRuntimeConfig();
   const cfg = publicConfig();
   const d = new Date();
   d.setDate(d.getDate() + 10);
