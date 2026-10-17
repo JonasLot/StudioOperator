@@ -253,3 +253,26 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- Client portal: an unguessable per-job link, and what the client writes back through it.
+CREATE TABLE IF NOT EXISTS client_shares (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT,
+  last_viewed_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_shares_token ON client_shares(token);
+CREATE INDEX IF NOT EXISTS idx_client_shares_job ON client_shares(job_id);
+
+CREATE TABLE IF NOT EXISTS client_feedback (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref TEXT,
+  body TEXT NOT NULL,
+  revision_id TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_client_feedback_job ON client_feedback(job_id, created_at);

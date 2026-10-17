@@ -57,6 +57,22 @@ The repository interface is async (`src/lib/repo/repository.ts`), the SQL lives 
 `src/lib/repo/sql-repository.ts`, and each database has a small driver in `src/lib/repo/drivers/`. Adding another
 database means writing one more `SqlDriver`.
 
+## Client link
+
+Each job can have one unguessable client page at `/c/<token>` (job → **Client** tab → *Create client link*). It needs no
+account and is the only route the sign-in does not cover. The client sees:
+
+- the brief as understood, with *This is right* / *Something's off*
+- the open intake questions, answerable in place
+- **only the takes you approved** on the output review board, each with *Approve* / *Request a change*
+- a free note field, and their own messages echoed back
+
+Costs, margins, prompts, models, QA notes and rights notes are never sent: the page is built from an allow-list
+(`src/lib/agency/portal.ts`), not filtered. A change request while the job is in QA becomes a normal revision, so the
+scope and budget guardrails apply unchanged. Everything the client writes lands in the Client tab and the activity log.
+*Revoke link* cuts access immediately; creating a link again mints a new token. For Upwork / Fiverr / Contra jobs the
+link is never auto-sent — paste it into the platform chat yourself.
+
 ## Sign-in, profile and mock mode
 
 **Sign-in.** Set `ADMIN_PASSCODE` (12+ characters) and every page, API route and server action requires a

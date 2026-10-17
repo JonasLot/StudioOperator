@@ -419,3 +419,33 @@ export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
   escalation: "Escalation",
   memory: "Client memory",
 };
+
+// --- client portal -----------------------------------------------------------
+
+/** The per-job link the client opens. The token is the credential, so it is only ever shown to the operator. */
+export interface ClientShare {
+  id: string;
+  jobId: string;
+  token: string;
+  createdAt: string;
+  revokedAt: string | null;
+  lastViewedAt: string | null;
+}
+
+export const CLIENT_FEEDBACK_KINDS = ["answer", "brief_ok", "brief_change", "approve", "change", "comment"] as const;
+export type ClientFeedbackKind = (typeof CLIENT_FEEDBACK_KINDS)[number];
+
+/**
+ * Something the client wrote on the portal. `ref` points at what it is about: an intake
+ * question id (answer), a deliverable/take id (approve, change) or null (brief, comment).
+ * A "change" that could be logged as a revision carries that revision's id.
+ */
+export interface ClientFeedback {
+  id: string;
+  jobId: string;
+  kind: ClientFeedbackKind;
+  ref: string | null;
+  body: string;
+  revisionId: string | null;
+  createdAt: string;
+}
