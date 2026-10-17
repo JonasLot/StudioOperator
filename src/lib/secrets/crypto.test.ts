@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanEnvSecret, describeKeyShape, cleanSecretInput, decryptSecret, encryptSecret, maskSecret, passcodeMatches } from "./crypto";
+import { normalizeHiggsfieldPair, cleanEnvSecret, describeKeyShape, cleanSecretInput, decryptSecret, encryptSecret, maskSecret, passcodeMatches } from "./crypto";
 
 const PASS = "correct horse battery staple";
 
@@ -55,4 +55,19 @@ test("describeKeyShape reports length and suspicious characters, never the value
   assert.equal(describeKeyShape('a "b"').hasQuote, true);
   assert.equal(describeKeyShape("a b").hasWhitespace, true);
   assert.ok(!JSON.stringify(describeKeyShape("super-secret-value")).includes("super"));
+});
+
+test("normalizeHiggsfieldPair undoes a pasted KEY_ID:KEY_SECRET", () => {
+  const id = "3f2a9c1e-0000-4000-8000-123456789fe2";
+  const secret = "s".repeat(64);
+  // whole credential pasted into the secret field next to the right ID
+  assert.deepEqual(normalizeHiggsfieldPair(id, `${id}:${secret}`), { id, secret });
+  // whole credential in the secret field, ID empty
+  assert.deepEqual(normalizeHiggsfieldPair("", `${id}:${secret}`), { id, secret });
+  // whole credential in the ID field, secret empty
+  assert.deepEqual(normalizeHiggsfieldPair(`${id}:${secret}`, ""), { id, secret });
+  // a correct pair, and a secret that really contains a colon, are untouched
+  assert.deepEqual(normalizeHiggsfieldPair(id, secret), { id, secret });
+  assert.deepEqual(normalizeHiggsfieldPair(id, "ab:cd"), { id, secret: "ab:cd" });
+  assert.deepEqual(normalizeHiggsfieldPair("", ""), { id: "", secret: "" });
 });

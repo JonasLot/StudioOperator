@@ -72,3 +72,20 @@ export function cleanEnvSecret(raw: string | undefined): string {
 export function describeKeyShape(value: string): { length: number; hasColon: boolean; hasWhitespace: boolean; hasQuote: boolean } {
   return { length: value.length, hasColon: value.includes(":"), hasWhitespace: /\s/.test(value), hasQuote: /["']/.test(value) };
 }
+
+/**
+ * Higgsfield hands out "KEY_ID:KEY_SECRET" and the SDK takes it as one string, so it is easy to paste the whole
+ * thing into one field. Undo that: a secret that starts with "<id>:" loses the prefix, a secret holding a combined
+ * value with no ID set supplies both, and a combined value in the ID field with no secret is split. Anything
+ * else (including a secret that genuinely contains a colon) is left alone.
+ */
+export function normalizeHiggsfieldPair(id: string, secret: string): { id: string; secret: string } {
+  if (secret && id && secret.startsWith(`${id}:`)) return { id, secret: secret.slice(id.length + 1) };
+  const split = (combined: string) => {
+    const i = combined.indexOf(":");
+    return i > 0 && i < combined.length - 1 ? { id: combined.slice(0, i), secret: combined.slice(i + 1) } : null;
+  };
+  if (secret && !id) return split(secret) ?? { id, secret };
+  if (id && !secret) return split(id) ?? { id, secret };
+  return { id, secret };
+}
