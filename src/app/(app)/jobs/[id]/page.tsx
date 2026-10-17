@@ -61,6 +61,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
               ? `Brief analysed by ${analysis.analyzer}${cfg.mockMode ? " · mock mode, no API keys used" : ""}`
               : "Not analysed yet — run analysis to plan and price it."}
           </p>
+          {intake?.warning ? <p className="mt-2 max-w-[60ch] break-words rounded-md bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{intake.warning}</p> : null}
           <div className="mt-4 flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
             <StatusPill status={job.status} />
             <span className="inline-flex items-center gap-1.5 px-1.5">
