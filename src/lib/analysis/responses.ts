@@ -57,7 +57,11 @@ export function toStrictJsonSchema(schema: z.ZodType): Record<string, unknown> {
       const out: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
         if (UNSUPPORTED.has(k)) continue;
-        out[k] = walk(v);
+        // The keys of `properties` / `$defs` are field names, not keywords: a field called "format" must survive.
+        out[k] =
+          (k === "properties" || k === "$defs") && v && typeof v === "object" && !Array.isArray(v)
+            ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([name, child]) => [name, walk(child)]))
+            : walk(v);
       }
       if (out.type === "object" && out.properties && typeof out.properties === "object") {
         out.additionalProperties = false;
