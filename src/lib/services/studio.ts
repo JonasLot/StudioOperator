@@ -4,7 +4,9 @@ import { buildWorkflow } from "@/lib/analysis/plan";
 import { deriveBriefFacts } from "@/lib/analysis/view";
 import { config, scrubSecrets } from "@/lib/config";
 import { persistAsset } from "@/lib/higgsfield/asset-store";
+import { TAKE_REVIEWS } from "@/lib/domain/types";
 import type {
+  TakeReview,
   ApprovalKind,
   ApprovalRequest,
   BriefView,
@@ -412,6 +414,8 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
     outputUrl: null,
     outputType: null,
     selected: false,
+    reviewStatus: "pending",
+    reviewNote: null,
     error: null,
     timedOutAt: null,
     createdAt: now(),
@@ -635,6 +639,25 @@ export async function toggleSelect(generationId: string) {
   const g = await repo.getGeneration(generationId);
   if (!g || g.status !== "completed") throw new GuardrailError("Only completed outputs can be selected.");
   await repo.updateGeneration(g.id, { selected: !g.selected });
+}
+
+/**
+ * Record the operator's verdict on a completed take. Approving puts it in the delivery set,
+ * rejecting takes it out, and "pending" resets both. A rejection may carry a reason that
+ * later revisions and retries can learn from.
+ */
+export async function reviewGeneration(jobId: string, generationId: string, status: TakeReview, note: string | null) {
+  const repo = getRepo();
+  const g = await repo.getGeneration(generationId);
+  if (!g || g.jobId !== jobId) throw new GuardrailError("Generation not found.");
+  if (g.status !== "completed") throw new GuardrailError("Only completed outputs can be reviewed.");
+  if (!(TAKE_REVIEWS as readonly string[]).includes(status)) throw new GuardrailError("Unknown review status.");
+  const trimmed = note?.trim().slice(0, 500) || null;
+  await repo.updateGeneration(g.id, {
+    reviewStatus: status,
+    reviewNote: status === "pending" ? null : trimmed,
+    selected: status === "approved",
+  });
 }
 
 /**

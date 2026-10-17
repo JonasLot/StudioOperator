@@ -145,3 +145,48 @@ export async function jobQa(jobId: string): Promise<JobQa> {
     limits,
   };
 }
+
+export interface TakeQa {
+  report: QaReport;
+  repair: RepairDecision | null;
+}
+
+/**
+ * QA for every completed take of a job (not just the representative one per step), keyed by
+ * generation id, so the review board can show the checklist next to whichever take is open.
+ * Deterministic: the same take always gets the same report.
+ */
+export async function takeQa(jobId: string): Promise<Record<string, TakeQa>> {
+  const repo = getRepo();
+  const job = await repo.getJob(jobId);
+  const analysis = await getBrief(jobId);
+  const workflow = await repo.getCurrentWorkflow(jobId);
+  if (!job || !analysis || !workflow) return {};
+  const generations = await repo.listGenerations(jobId);
+  const revisions = await repo.listRevisions(jobId);
+  const p = computeProfitability(job, workflow, generations, revisions);
+  const jobRepairSpentUsd = generations.filter((g) => g.revisionId).reduce((a, g) => a + generationSpend(g), 0);
+  const autoRepairsSoFar = new Set(generations.filter((g) => g.revisionId).map((g) => g.revisionId)).size;
+  const remainingCapUsd = (workflow.maxBudget ?? job.budget) - p.committedSpend;
+  const limits = { perRepairMaxUsd: config.qa.perRepairMaxUsd, perJobRepairMaxUsd: config.qa.perJobRepairMaxUsd, maxAutoRepairsPerJob: config.qa.maxAutoRepairsPerJob };
+
+  const out: Record<string, TakeQa> = {};
+  for (const gen of generations) {
+    if (gen.status !== "completed") continue;
+    const step = workflow.steps.find((s) => s.id === gen.stepId);
+    if (!step) continue; // a take from a superseded workflow
+    const deliverable = analysis.deliverables.find((d) => step.deliverableIds.includes(d.id)) ?? analysis.deliverables[0] ?? null;
+    const report = assessOutput(buildInput(job, analysis, gen, deliverable, step));
+    let repair: RepairDecision | null = null;
+    if (report.verdict === "controlled_edit" || report.verdict === "regenerate") {
+      const issue = primaryIssue(report);
+      const model = getModel(gen.model);
+      repair = decideRepair(report, issue ? `${issue.label}: ${issue.detail}` : report.summary, {
+        modelId: model.id, modelLabel: model.label, unitCostUsd: model.unitCostUsd, attempts: config.qa.repairAttempts,
+        jobRepairSpentUsd, autoRepairsSoFar, priorTotalUsd: p.committedSpend, clientPriceUsd: job.budget, netRevenueUsd: p.netRevenue, remainingCapUsd,
+      }, limits);
+    }
+    out[gen.id] = { report, repair };
+  }
+  return out;
+}

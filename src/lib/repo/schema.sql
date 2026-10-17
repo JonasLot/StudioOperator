@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS generations (
   output_url TEXT,
   output_type TEXT,
   selected INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'pending',
+  review_note TEXT,
   error TEXT,
   timed_out_at TEXT,
   created_at TEXT NOT NULL,

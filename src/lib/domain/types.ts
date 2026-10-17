@@ -104,6 +104,10 @@ export interface Workflow {
 
 export type GenerationStatus = "queued" | "in_progress" | "completed" | "failed" | "nsfw" | "canceled" | "blocked";
 
+export const TAKE_REVIEWS = ["pending", "approved", "rejected"] as const;
+/** The operator's verdict on a take. `selected` stays the delivery pick; approving selects, rejecting deselects. */
+export type TakeReview = (typeof TAKE_REVIEWS)[number];
+
 export interface Generation {
   id: string;
   jobId: string;
@@ -122,6 +126,8 @@ export interface Generation {
   outputUrl: string | null;
   outputType: "image" | "video" | "audio" | null;
   selected: boolean;
+  reviewStatus: TakeReview;
+  reviewNote: string | null;
   error: string | null;
   // Application-level timeout: set when polling exceeds the configured limit.
   // Kept separate from `status` so an internal timeout is never misreported as a
@@ -212,7 +218,7 @@ export interface IntakeAnalysis {
   decision: FinalDecision; // deterministic app decision on the effective analysis
   decisionReasons: string[];
   estimatedSpend: number; // deterministic catalog-priced estimate, USD
-  reviewStatus: ReviewStatus;
+  reviewStatus: TakeReview;
   reviewedBy: string | null;
   reviewedAt: string | null;
   warning: string | null;
