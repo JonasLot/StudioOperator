@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanEnvSecret, cleanSecretInput, decryptSecret, encryptSecret, maskSecret, passcodeMatches } from "./crypto";
+import { cleanEnvSecret, describeKeyShape, cleanSecretInput, decryptSecret, encryptSecret, maskSecret, passcodeMatches } from "./crypto";
 
 const PASS = "correct horse battery staple";
 
@@ -47,4 +47,12 @@ test("cleanEnvSecret strips pasted quotes and whitespace and treats blank as uns
   assert.equal(cleanEnvSecret("plain-key-1234"), "plain-key-1234");
   assert.equal(cleanEnvSecret("  \n"), "");
   assert.equal(cleanEnvSecret(undefined), "");
+});
+
+test("describeKeyShape reports length and suspicious characters, never the value", () => {
+  assert.deepEqual(describeKeyShape("abcdef123456"), { length: 12, hasColon: false, hasWhitespace: false, hasQuote: false });
+  assert.equal(describeKeyShape("id:secret").hasColon, true);
+  assert.equal(describeKeyShape('a "b"').hasQuote, true);
+  assert.equal(describeKeyShape("a b").hasWhitespace, true);
+  assert.ok(!JSON.stringify(describeKeyShape("super-secret-value")).includes("super"));
 });

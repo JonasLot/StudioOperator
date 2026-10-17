@@ -19,6 +19,8 @@ import type {
 import { getModel } from "@/lib/higgsfield/catalog";
 import { getProvider } from "@/lib/higgsfield/provider";
 import { getRepo } from "@/lib/repo";
+import { describeKeyShape } from "@/lib/secrets/crypto";
+import { secretStatus } from "@/lib/secrets";
 import { audit } from "./audit";
 import { computeProfitability } from "./economics";
 import {
@@ -793,11 +795,26 @@ export function providerInfo() {
   return { name: p.name, live: p.live, capabilities: p.capabilities, baseUrl: config.higgsfield.baseUrl, wireEnabled: config.higgsfield.wireEnabled };
 }
 
+/** What the app is about to send to Higgsfield, described without revealing it: source, length and last four characters. */
+function higgsfieldKeyDiagnostics(): string {
+  const status = secretStatus();
+  const describe = (name: "hfApiKeyId" | "hfApiKeySecret", label: string, value: string) => {
+    const row = status.find((s) => s.name === name);
+    const shape = describeKeyShape(value);
+    const source = row?.source === "settings" ? "saved in Settings" : row?.source === "environment" ? "from the environment" : "not set";
+    const flags = [shape.hasColon ? "contains ':'" : "", shape.hasWhitespace ? "contains whitespace" : "", shape.hasQuote ? "contains quotes" : ""].filter(Boolean);
+    const tail = row?.hint?.replace(/•/g, "");
+    return `${label}: ${shape.length} characters, ${source}${tail ? `, ends ${tail}` : ""}${flags.length ? ` (${flags.join(", ")})` : ""}`;
+  };
+  return `${describe("hfApiKeyId", "Key ID", config.higgsfield.apiKeyId)}. ${describe("hfApiKeySecret", "Secret", config.higgsfield.apiKeySecret)}.`;
+}
+
 export async function providerConnectionTest(): Promise<{ ok: boolean; detail: string; name: string; live: boolean }> {
   const p = getProvider();
   try {
     const r = await p.connectionTest();
-    return { ok: r.ok, detail: scrubSecrets(r.detail), name: p.name, live: p.live };
+    const detail = p.name === "higgsfield" ? `${r.detail} ${higgsfieldKeyDiagnostics()}` : r.detail;
+    return { ok: r.ok, detail: scrubSecrets(detail), name: p.name, live: p.live };
   } catch (err) {
     return { ok: false, detail: scrubSecrets((err as Error).message), name: p.name, live: p.live };
   }

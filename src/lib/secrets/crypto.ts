@@ -67,3 +67,8 @@ export function cleanSecretInput(raw: string): { ok: true; value: string } | { o
 export function cleanEnvSecret(raw: string | undefined): string {
   return (raw ?? "").trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
 }
+
+/** Non-secret facts about a credential, for diagnosing a rejected key. Never includes the value itself. */
+export function describeKeyShape(value: string): { length: number; hasColon: boolean; hasWhitespace: boolean; hasQuote: boolean } {
+  return { length: value.length, hasColon: value.includes(":"), hasWhitespace: /\s/.test(value), hasQuote: /["']/.test(value) };
+}
