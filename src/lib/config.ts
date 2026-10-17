@@ -1,6 +1,7 @@
 import "server-only";
 import type { JobSource } from "@/lib/domain/types";
 import { secretValue } from "@/lib/secrets";
+import { normalizeHiggsfieldPair } from "@/lib/secrets/crypto";
 import { isMockForced, isMockMode, operatorName } from "@/lib/settings";
 
 // Server-only configuration. Secrets are read here and never serialised to the client.
@@ -68,10 +69,10 @@ export const config = {
   // HIGGSFIELD_* are accepted as fallbacks.
   higgsfield: {
     get apiKeyId() {
-      return secretValue("hfApiKeyId");
+      return normalizeHiggsfieldPair(secretValue("hfApiKeyId"), secretValue("hfApiKeySecret")).id;
     },
     get apiKeySecret() {
-      return secretValue("hfApiKeySecret");
+      return normalizeHiggsfieldPair(secretValue("hfApiKeyId"), secretValue("hfApiKeySecret")).secret;
     },
     baseUrl: (process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai").replace(/\/$/, ""),
     // The live Higgsfield wire mapping is UNVERIFIED against the official docs.

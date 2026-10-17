@@ -27,7 +27,7 @@ export const SECRET_DEFS: Record<SecretName, { label: string; description: strin
   },
   hfApiKeySecret: {
     label: "Higgsfield API key secret",
-    description: "Pairs with the key ID. Both are needed for live generation.",
+    description: "Pairs with the key ID. Both are needed for live generation. Paste only the secret, not the combined ID:SECRET.",
     env: ["HF_API_KEY_SECRET", "HIGGSFIELD_API_KEY_SECRET"],
   },
 };
