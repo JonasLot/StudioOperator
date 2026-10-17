@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractOutputText, parseOutputJson } from "./responses";
-import { safeParseAnalysis } from "./schema";
+import { z } from "zod";
+import { extractOutputText, parseOutputJson, toStrictJsonSchema } from "./responses";
+import { AnalysisSchema, safeParseAnalysis } from "./schema";
 
 test("extracts top-level output_text", () => {
   assert.equal(extractOutputText({ output_text: "hello" }), "hello");
@@ -55,4 +56,19 @@ test("end-to-end: a malformed-but-JSON payload fails validation, not parsing", (
   const json = parseOutputJson(text); // parses fine
   const parsed = safeParseAnalysis(json); // but fails validation
   assert.equal(parsed.ok, false);
+});
+
+test("toStrictJsonSchema keeps a field named 'format' and still strips unsupported keywords", () => {
+  const strict = toStrictJsonSchema(AnalysisSchema) as { properties: { deliverables: { items: { properties: Record<string, unknown>; required: string[] } } } };
+  const item = strict.properties.deliverables.items;
+  assert.ok("format" in item.properties, "the deliverable 'format' field must be sent to the model");
+  assert.ok(item.required.includes("format"));
+
+  const small = toStrictJsonSchema(z.object({ name: z.string().min(1).max(5), format: z.string() })) as {
+    properties: { name: Record<string, unknown>; format: unknown };
+    required: string[];
+  };
+  assert.equal("minLength" in small.properties.name, false);
+  assert.equal("maxLength" in small.properties.name, false);
+  assert.deepEqual(small.required, ["name", "format"]);
 });
