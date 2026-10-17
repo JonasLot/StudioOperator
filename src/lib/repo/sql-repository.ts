@@ -83,7 +83,12 @@ const SPEC = {
 } satisfies Record<string, FieldSpec>;
 
 // Additive column migrations for databases created before a column existed.
-export const MIGRATIONS = ["ALTER TABLE generations ADD COLUMN timed_out_at TEXT", "ALTER TABLE jobs ADD COLUMN template_id TEXT"];
+export const MIGRATIONS = [
+  "ALTER TABLE generations ADD COLUMN timed_out_at TEXT",
+  "ALTER TABLE jobs ADD COLUMN template_id TEXT",
+  "ALTER TABLE generations ADD COLUMN review_status TEXT NOT NULL DEFAULT 'pending'",
+  "ALTER TABLE generations ADD COLUMN review_note TEXT",
+];
 
 // ---------- repository ----------
 

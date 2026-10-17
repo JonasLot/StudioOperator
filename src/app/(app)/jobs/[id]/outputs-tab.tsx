@@ -1,10 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Check, Loader2, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { Check, Loader2, ScanSearch, TriangleAlert, X } from "lucide-react";
 import { toggleSelectAction } from "@/app/actions";
 import { useServerAction } from "@/components/action-button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { Generation, Job, Revision, Workflow } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +17,7 @@ function Tile({ g, jobId, onToggle, disabled }: { g: Generation; jobId: string; 
       className={cn(
         "group relative overflow-hidden rounded-md border bg-muted/40",
         g.selected && "ring-2 ring-ok ring-offset-1 ring-offset-background",
+        g.reviewStatus === "rejected" && "opacity-60",
       )}
       data-generation={g.id}
       data-status={g.status}
@@ -44,7 +47,10 @@ function Tile({ g, jobId, onToggle, disabled }: { g: Generation; jobId: string; 
         )}
       </div>
       <figcaption className="flex items-center justify-between gap-1 px-1.5 py-1 text-[11px]">
-        <span className="tnum text-muted-foreground">#{g.attempt}</span>
+        <span className="tnum inline-flex items-center gap-1 text-muted-foreground">
+          #{g.attempt}
+          {g.reviewStatus === "rejected" ? <X className="size-3 text-bad" aria-label="Rejected" /> : null}
+        </span>
         {done ? (
           <button
             type="button"
@@ -84,12 +90,21 @@ export function OutputsTab({ job, workflow, generations, revisions }: { job: Job
       .map((r) => ({ key: r.id, title: `Revision — ${r.actionSummary}`, gens: generations.filter((g) => g.revisionId === r.id) })),
   ].filter((x) => x.gens.length);
   const selected = generations.filter((g) => g.selected).length;
+  const completedGens = generations.filter((g) => g.status === "completed" && g.outputUrl);
+  const completedCount = completedGens.length;
+  const reviewed = completedGens.filter((g) => g.reviewStatus !== "pending").length;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
         <p className="text-muted-foreground">
           Pick the takes that go into delivery. The agent pre-selects the first usable take per step. <span className="text-foreground">{selected} selected.</span>
         </p>
+        <Button asChild size="sm" variant={reviewed < completedCount ? "default" : "outline"}>
+          <Link href={`/jobs/${job.id}/outputs/review`}>
+            <ScanSearch /> Review outputs
+            <span className="tnum text-[11px] opacity-80">{reviewed}/{completedCount}</span>
+          </Link>
+        </Button>
         {error ? <span className="text-xs text-bad">{error}</span> : null}
       </div>
       {groups.map((grp) => {

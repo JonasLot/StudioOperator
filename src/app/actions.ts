@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeParseAnalysis, type Analysis } from "@/lib/analysis/schema";
-import { JOB_SOURCES, PAUSE_CONDITIONS, type MessageType, type PauseCondition } from "@/lib/domain/types";
+import { JOB_SOURCES, PAUSE_CONDITIONS, type MessageType, type PauseCondition, type TakeReview } from "@/lib/domain/types";
 import { resetDemo } from "@/lib/seed";
 import * as agency from "@/lib/services/agency";
 import { GuardrailError } from "@/lib/services/guardrails";
@@ -120,6 +120,9 @@ export async function retryStepAction(jobId: string, stepId: string) {
 }
 export async function toggleSelectAction(jobId: string, generationId: string) {
   return run(jobId, () => studio.toggleSelect(generationId));
+}
+export async function reviewGenerationAction(jobId: string, generationId: string, status: TakeReview, note: string | null = null) {
+  return run(jobId, () => studio.reviewGeneration(jobId, generationId, status, note));
 }
 export async function cancelGenerationAction(jobId: string, generationId: string) {
   return run(jobId, () => studio.cancelGeneration(jobId, generationId), "Generation cancelled.");
