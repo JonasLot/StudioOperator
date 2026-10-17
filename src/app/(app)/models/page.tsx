@@ -30,8 +30,8 @@ export default async function ModelsPage() {
         <div>
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Capability catalog</h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Grouped by production role. Configurable in <code className="font-mono text-[12px]">src/lib/router/catalog.ts</code>. Entries marked <em>confirm</em> are seeded from routing principles and
-            not yet verified against the live Higgsfield catalog or its documented model pages.
+            Grouped by production role. Configurable in <code className="font-mono text-[12px]">src/lib/router/catalog.ts</code>. Models marked <em>in catalog</em> are in Higgsfield&apos;s live model
+            list. Prices are planning estimates by tier — Higgsfield bills in credits and its list has no prices — so replace them before relying on the margin.
           </p>
         </div>
         {ROUTER_ROLES.map((role) => (
@@ -47,8 +47,8 @@ export default async function ModelsPage() {
                         {m.label}
                         <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">{m.family}</span>
                         <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">{m.medium.replace("_", " ")}</span>
-                        {m.verified ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-ok-soft px-1.5 py-0.5 text-[11px] text-ok"><BadgeCheck className="size-3" /> verified</span>
+                        {m.listed ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-ok-soft px-1.5 py-0.5 text-[11px] text-ok"><BadgeCheck className="size-3" /> in catalog</span>
                         ) : (
                           <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"><CircleDashed className="size-3" /> confirm</span>
                         )}

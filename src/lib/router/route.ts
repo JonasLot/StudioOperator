@@ -98,8 +98,8 @@ function candidates(role: RouterRole, input: RouteInput): RouterModel[] {
   });
 }
 
-function finishCandidates(kind: "upscale" | "voice"): RouterModel[] {
-  const media = kind === "upscale" ? ["upscale"] : ["voice", "lipsync"];
+function finishCandidates(kind: "upscale" | "voice", medium: RouteInput["medium"] = "video"): RouterModel[] {
+  const media = kind === "voice" ? ["voice"] : medium === "image" ? ["upscale_image"] : ["upscale"];
   return ROUTER_CATALOG.filter((m) => m.role === "finish" && media.includes(m.medium)).sort((a, b) => a.costPerAttemptUsd - b.costPerAttemptUsd);
 }
 
@@ -143,9 +143,9 @@ export function proposeRoute(input: RouteInput): RoutePlan {
 
   if (input.talking) {
     const v = finishCandidates("voice");
-    if (v.length) stages.push({ key: "finish", role: "finish", title: "Voice & lip sync", why: "Record/align the voice and sync it to picture.", selectedId: v[0].id, candidateIds: v.map((m) => m.id), estimatedAttempts: keep, optional: false });
+    if (v.length) stages.push({ key: "finish", role: "finish", title: "Voice", why: "Record the voice track for the approved picture.", selectedId: v[0].id, candidateIds: v.map((m) => m.id), estimatedAttempts: keep, optional: false });
   }
-  const up = finishCandidates("upscale");
+  const up = finishCandidates("upscale", input.medium);
   if (up.length) {
     stages.push({
       key: "finish", role: "finish", title: "Upscale, grade & export (QA)",
