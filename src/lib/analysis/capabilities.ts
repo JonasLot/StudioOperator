@@ -12,9 +12,9 @@ import type { Capability } from "./schema";
 export const CAPABILITY_TO_MODEL: Record<Capability, string> = {
   image_keyframes: "soul-image",
   text_frames: "ideogram-4",
-  hero_video: "cinema-studio",
+  hero_video: "kling-3-0-pro-t2v",
   reference_video: "kling-o3-image-ref",
-  cutdown_video: "seedance-2-5-ref",
+  cutdown_video: "seedance-2-0-t2v",
   voiceover: "voice-tts",
   edit_assemble: "edit-assemble",
   finishing: "upscale-4k",

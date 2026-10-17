@@ -2,6 +2,7 @@ import "server-only";
 import { config, scrubSecrets } from "@/lib/config";
 import type { Generation, GenerationStatus } from "@/lib/domain/types";
 import { getModel } from "./catalog";
+import { buildRequestBody } from "./request";
 
 // ===========================================================================
 // ⚠️  UNVERIFIED HIGGSFIELD WIRE MAPPING  ⚠️
@@ -59,14 +60,14 @@ export interface WireSubmit {
   status: GenerationStatus;
 }
 
-export async function wireSubmit(input: { generationId: string; modelId: string; prompt: string; imageUrls?: string[] }): Promise<WireSubmit> {
+export async function wireSubmit(input: { generationId: string; modelId: string; prompt: string; imageUrls?: string[]; aspectRatio?: string | null }): Promise<WireSubmit> {
   assertEnabled();
   const model = getModel(input.modelId);
   try {
     const res = await fetch(`${config.higgsfield.baseUrl}${model.endpoint}`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json", "Idempotency-Key": input.generationId },
-      body: JSON.stringify({ prompt: input.prompt, ...(input.imageUrls?.length ? { image_urls: input.imageUrls } : {}) }),
+      body: JSON.stringify(buildRequestBody(model.request, { prompt: input.prompt, imageUrls: input.imageUrls, aspectRatio: input.aspectRatio })),
       cache: "no-store",
     });
     if (!res.ok) throw new Error(`Higgsfield submit failed: ${await readError(res)}`);

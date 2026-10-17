@@ -1,4 +1,5 @@
 import type { ModelCategory } from "@/lib/domain/types";
+import type { RequestSpec } from "./request";
 
 /**
  * Production model catalog for the Higgsfield API.
@@ -21,6 +22,7 @@ export interface CatalogModel {
   unitLabel: string;
   output: "image" | "video" | "audio";
   strengths: string;
+  request?: RequestSpec; // the body fields this model takes; without it only { prompt, image_urls? } is sent
 }
 
 export const MODEL_CATALOG: CatalogModel[] = [
@@ -45,6 +47,35 @@ export const MODEL_CATALOG: CatalogModel[] = [
     unitLabel: "per image",
     output: "image",
     strengths: "Exact on-screen text, title cards and end frames",
+  },
+  {
+    // Path from the docs sample for Seedance 2.0 text-to-video; body fields (prompt, duration, resolution,
+    // aspect_ratio) are the documented ones. Audio is left at the API default.
+    id: "seedance-2-0-t2v",
+    label: "Seedance 2.0 · text to video",
+    category: "video",
+    endpoint: "/bytedance/seedance-2.0/text-to-video",
+    verified: true,
+    unitCostUsd: 1.5,
+    unitLabel: "per 5s clip",
+    output: "video",
+    strengths: "Fast, consistent social and cutdown footage from a prompt",
+    request: { duration: 5, resolution: "720p", aspectRatios: ["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"] },
+  },
+  {
+    // Path from the Kling 3.0 Pro text-to-video reference. Body fields follow the CLI's parameters for
+    // kling3_0 (prompt, duration, aspect_ratio); not confirmed against the REST schema, so a first live
+    // run may answer 422 naming a field. A rejected submit is never charged.
+    id: "kling-3-0-pro-t2v",
+    label: "Kling 3.0 Pro · text to video",
+    category: "video",
+    endpoint: "/kling-video/v3.0/pro/text-to-video",
+    verified: true,
+    unitCostUsd: 1.2,
+    unitLabel: "per 5s clip",
+    output: "video",
+    strengths: "Cinematic camera and controlled motion for hero shots",
+    request: { duration: 5, aspectRatios: ["16:9", "9:16", "1:1"] },
   },
   {
     id: "kling-o3-image-ref",

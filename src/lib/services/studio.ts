@@ -380,6 +380,14 @@ export async function startProduction(jobId: string) {
   await tick(jobId);
 }
 
+/** The aspect ratio of the deliverable(s) a step serves, for models that take one. */
+async function aspectRatioFor(jobId: string, step: WorkflowStep): Promise<string | null> {
+  const brief = await getBrief(jobId);
+  if (!brief) return null;
+  const served = step.deliverableIds.length ? brief.deliverables.filter((d) => step.deliverableIds.includes(d.id)) : brief.deliverables;
+  return served.find((d) => d.aspectRatio)?.aspectRatio ?? null;
+}
+
 async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, attempt: number, prompt: string, revisionId: string | null, estimate: number): Promise<"submitted" | "over_budget"> {
   const repo = getRepo();
   const gens = await repo.listGenerations(job.id);
@@ -423,7 +431,7 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
     }
   }
   try {
-    const r = await provider.submit({ generationId: gen.id, modelId: step.modelId, prompt, costEstimate: estimate });
+    const r = await provider.submit({ generationId: gen.id, modelId: step.modelId, prompt, aspectRatio: await aspectRatioFor(job.id, step), costEstimate: estimate });
     await repo.updateGeneration(gen.id, { providerRequestId: r.providerRequestId, statusUrl: r.statusUrl, status: r.status });
     await log(job.id, "agent", `Submitted take ${attempt} of “${step.name}” on ${model.label} (${model.endpoint}); est. $${estimate.toFixed(2)}, request ${r.providerRequestId}.`);
     await audit({ jobId: job.id, kind: "generation", summary: `Submitted take ${attempt} of “${step.name}” on ${model.label}.`, costDeltaUsd: estimate });

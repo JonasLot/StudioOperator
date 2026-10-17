@@ -31,6 +31,7 @@ export interface SubmitInput {
   modelId: string;
   prompt: string;
   imageUrls?: string[];
+  aspectRatio?: string | null; // the deliverable's ratio, e.g. "9:16"
   costEstimate: number;
 }
 export interface SubmitResult {
@@ -123,7 +124,7 @@ export const higgsfieldProvider: GenerationProvider = {
   live: true,
   capabilities: WIRE_CAPABILITIES,
   async submit(input) {
-    const r = await wireSubmit({ generationId: input.generationId, modelId: input.modelId, prompt: input.prompt, imageUrls: input.imageUrls });
+    const r = await wireSubmit({ generationId: input.generationId, modelId: input.modelId, prompt: input.prompt, imageUrls: input.imageUrls, aspectRatio: input.aspectRatio });
     return { providerRequestId: r.providerRequestId, statusUrl: r.statusUrl, cancelUrl: r.cancelUrl, status: r.status };
   },
   async poll(gen) {
