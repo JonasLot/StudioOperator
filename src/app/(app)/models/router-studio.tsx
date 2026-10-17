@@ -107,13 +107,13 @@ export function RouterStudio() {
                 <div className="flex items-center gap-2">
                   <Label className="w-24 shrink-0">Model</Label>
                   <NativeSelect value={s.model.id} onChange={(e) => setOverrides((p) => ({ ...p, [i]: { ...p[i], selectedId: e.target.value } }))}>
-                    {s.candidateIds.map((id) => { const m = routerModel(id); return <option key={id} value={id}>{m?.label ?? id}{m && !m.verified ? " — unverified" : ""}</option>; })}
+                    {s.candidateIds.map((id) => { const m = routerModel(id); return <option key={id} value={id}>{m?.label ?? id}{m && !m.listed ? " — not in catalog" : ""}</option>; })}
                   </NativeSelect>
                 </div>
                 <p className="text-[12.5px]"><span className="text-muted-foreground">Why it fits: </span>{s.model.strengths}. <span className="text-muted-foreground">Speed:</span> {s.model.speed} · {s.model.typicalQueue}.</p>
                 <p className="flex items-start gap-1.5 text-[12.5px] text-muted-foreground"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" /> Known failure mode: {s.model.failureMode}</p>
                 <p className="text-[12.5px] text-muted-foreground">Alternative: {s.alternative ? `${s.alternative.label} (${usd(s.alternative.costPerAttemptUsd, { cents: true })}/attempt)` : "—"}</p>
-                {!s.model.verified ? <p className="text-[11.5px] text-warn">⚠ Model data unverified against the live Higgsfield catalog — confirm before any paid run.</p> : <p className="text-[11.5px] text-ok">✓ Endpoint verified in the provider catalog.</p>}
+                {!s.model.listed ? <p className="text-[11.5px] text-warn">⚠ Not in Higgsfield&apos;s live model list — confirm before any paid run.</p> : <p className="text-[11.5px] text-ok">✓ In Higgsfield&apos;s live model list ({s.model.jobType}). {s.model.providerModelId ? "Linked to a provider endpoint." : "Not yet linked to a provider endpoint, so the app cannot run it yet."}</p>}
               </div>
               <div className="flex flex-col justify-center gap-1.5 rounded-lg border bg-muted/40 p-3 text-[13px]">
                 <div className="flex items-center justify-between gap-2">

@@ -39,18 +39,27 @@ test("proposes the full SEARCH→CONTROL→SHIP→repair→FINISH route for a vi
 test("SEARCH falls back to the cheapest lane when there are no control needs", () => {
   const plan = proposeRoute(input({ needsIdentity: false, needsText: false }));
   const search = plan.stages.find((s) => s.key === "search")!;
-  assert.equal(search.selectedId, "ltx-fast"); // cheapest video concept lane
+  const cheapest = byRole("search").filter((m) => m.medium === "video").sort((a, b) => a.costPerAttemptUsd - b.costPerAttemptUsd)[0];
+  assert.equal(search.selectedId, cheapest.id); // cheapest video concept lane
 });
 
 test("SEARCH prefers a reference-capable lane when identity must be preserved", () => {
   const plan = proposeRoute(input({ needsIdentity: true, needsText: false }));
   const search = plan.stages.find((s) => s.key === "search")!;
-  assert.equal(search.selectedId, "seedance-fast"); // reference-capable concept lane
+  const model = ROUTER_CATALOG.find((m) => m.id === search.selectedId)!;
+  assert.ok(model.controls.reference || model.controls.identity);
+  const cheapestReference = byRole("search").filter((m) => m.medium === "video" && (m.controls.reference || m.controls.identity)).sort((a, b) => a.costPerAttemptUsd - b.costPerAttemptUsd)[0];
+  assert.equal(search.selectedId, cheapestReference.id); // cheapest reference-capable concept lane
 });
 
 test("CONTROL respects exact-text + identity needs", () => {
   const control = proposeRoute(input()).stages.find((s) => s.key === "control")!;
-  assert.equal(control.selectedId, "qwen-edit"); // text + packaging + reference
+  const model = ROUTER_CATALOG.find((m) => m.id === control.selectedId)!;
+  assert.ok(model.controls.text && (model.controls.reference || model.controls.identity)); // text + packaging + reference
+  const best = byRole("control")
+    .filter((m) => m.controls.text && (m.controls.reference || m.controls.identity))
+    .sort((a, b) => a.costPerAttemptUsd - b.costPerAttemptUsd)[0];
+  assert.equal(control.selectedId, best.id); // cheapest model that satisfies both needs
 });
 
 test("economics: optional repair is excluded from estimate but included in max authorized spend", () => {
@@ -64,20 +73,20 @@ test("manual override recalculates economics instantly (pricier ship raises the 
   const plan = proposeRoute(input());
   const base = pricePlan(plan);
   const selections: StageSelection[] = plan.stages.map((s) => ({
-    key: s.key, selectedId: s.key === "ship" ? "veo-ship" : s.selectedId,
+    key: s.key, selectedId: s.key === "ship" ? "veo-3-1" : s.selectedId,
     estimatedAttempts: s.estimatedAttempts, optional: s.optional, title: s.title, why: s.why, role: s.role, candidateIds: s.candidateIds,
   }));
   const overridden = priceRoute(selections, plan.input);
   assert.ok(overridden.maxAuthorizedSpend > base.maxAuthorizedSpend);
   const ship = overridden.stages.find((s) => s.key === "ship")!;
-  assert.equal(ship.model.id, "veo-ship");
-  assert.ok(ship.alternative && ship.alternative.id !== "veo-ship"); // an alternative is always offered
+  assert.equal(ship.model.id, "veo-3-1");
+  assert.ok(ship.alternative && ship.alternative.id !== "veo-3-1"); // an alternative is always offered
 });
 
-test("talking brief adds a voice & lip-sync finish stage", () => {
+test("talking brief adds a voice finish stage", () => {
   const plan = proposeRoute(input({ talking: true }));
   const finishes = plan.stages.filter((s) => s.key === "finish");
-  assert.ok(finishes.length >= 2); // voice/lipsync + upscale
+  assert.ok(finishes.length >= 2); // voice + upscale
 });
 
 test("image brief ships on an image lane, not video", () => {
@@ -85,4 +94,18 @@ test("image brief ships on an image lane, not video", () => {
   const ship = plan.stages.find((s) => s.key === "ship")!;
   const model = ROUTER_CATALOG.find((m) => m.id === ship.selectedId)!;
   assert.equal(model.medium, "image");
+});
+
+test("every catalog entry is in Higgsfield's model list and has a unique id and job type", () => {
+  assert.ok(ROUTER_CATALOG.every((m) => m.listed && m.jobType.length > 0));
+  assert.equal(new Set(ROUTER_CATALOG.map((m) => m.id)).size, ROUTER_CATALOG.length);
+});
+
+test("finish upscale matches the medium: stills get an image upscaler, video gets a video upscaler", () => {
+  const upscaleOf = (medium: "image" | "video") => {
+    const stage = proposeRoute(input({ medium })).stages.filter((s) => s.key === "finish").at(-1)!;
+    return ROUTER_CATALOG.find((m) => m.id === stage.selectedId)!;
+  };
+  assert.equal(upscaleOf("image").medium, "upscale_image");
+  assert.equal(upscaleOf("video").medium, "upscale");
 });
