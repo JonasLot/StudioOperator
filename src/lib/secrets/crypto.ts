@@ -62,3 +62,8 @@ export function cleanSecretInput(raw: string): { ok: true; value: string } | { o
   if (/\s/.test(value)) return { ok: false, error: "A key can't contain spaces or line breaks — paste just the key." };
   return { ok: true, value };
 }
+
+/** An API key read from an environment variable: strip the quotes and stray whitespace a dashboard paste often adds. */
+export function cleanEnvSecret(raw: string | undefined): string {
+  return (raw ?? "").trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
+}

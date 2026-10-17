@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanSecretInput, decryptSecret, encryptSecret, maskSecret, passcodeMatches } from "./crypto";
+import { cleanEnvSecret, cleanSecretInput, decryptSecret, encryptSecret, maskSecret, passcodeMatches } from "./crypto";
 
 const PASS = "correct horse battery staple";
 
@@ -39,4 +39,12 @@ test("cleanSecretInput strips wrapping quotes and rejects bad input", () => {
   assert.equal(cleanSecretInput("abc").ok, false);
   assert.equal(cleanSecretInput("sk-abc 12345").ok, false);
   assert.equal(cleanSecretInput("x".repeat(600)).ok, false);
+});
+
+test("cleanEnvSecret strips pasted quotes and whitespace and treats blank as unset", () => {
+  assert.equal(cleanEnvSecret(' "sk-abc12345"\n'), "sk-abc12345");
+  assert.equal(cleanEnvSecret("'hf_id_1234'"), "hf_id_1234");
+  assert.equal(cleanEnvSecret("plain-key-1234"), "plain-key-1234");
+  assert.equal(cleanEnvSecret("  \n"), "");
+  assert.equal(cleanEnvSecret(undefined), "");
 });

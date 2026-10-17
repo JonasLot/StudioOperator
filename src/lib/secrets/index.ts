@@ -1,6 +1,6 @@
 import "server-only";
 import { getRepo } from "@/lib/repo";
-import { cleanSecretInput, decryptSecret, encryptSecret, MIN_PASSCODE_LENGTH, maskSecret, passcodeMatches } from "./crypto";
+import { cleanEnvSecret, cleanSecretInput, decryptSecret, encryptSecret, MIN_PASSCODE_LENGTH, maskSecret, passcodeMatches } from "./crypto";
 
 // ---------------------------------------------------------------------------
 // API keys that can be entered on the Settings page.
@@ -45,7 +45,10 @@ export function verifyAdminPasscode(input: string): boolean {
 }
 
 function envValue(name: SecretName): string {
-  for (const key of SECRET_DEFS[name].env) if (process.env[key]) return process.env[key]!;
+  for (const key of SECRET_DEFS[name].env) {
+    const value = cleanEnvSecret(process.env[key]);
+    if (value) return value;
+  }
   return "";
 }
 

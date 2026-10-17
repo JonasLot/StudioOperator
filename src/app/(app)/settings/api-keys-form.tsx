@@ -17,6 +17,18 @@ export interface KeyRow {
 
 const SOURCE_LABEL = { settings: "Saved here", environment: "From environment", none: "Not set" } as const;
 
+function MixedSourcesWarning() {
+  return (
+    <p role="alert" className="flex items-start gap-2 rounded-lg border bg-warn-soft px-3 py-2 text-[12.5px]">
+      <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
+      <span>
+        The Higgsfield key ID and secret come from different places (one saved here, one from the environment). They are used together, so if one is old
+        Higgsfield answers “Invalid credentials”. Save both here, or remove the saved one to use the environment variables.
+      </span>
+    </p>
+  );
+}
+
 export function ApiKeysForm({ rows, enabled, durable }: { rows: KeyRow[]; enabled: boolean; durable: boolean }) {
   const [state, action, pending] = React.useActionState<ApiKeysState, FormData>(saveApiKeysAction, undefined);
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -24,6 +36,12 @@ export function ApiKeysForm({ rows, enabled, durable }: { rows: KeyRow[]; enable
   React.useEffect(() => {
     if (state?.ok) formRef.current?.reset();
   }, [state]);
+
+  // ID and secret are resolved independently, so a stale saved value can pair with a new environment value
+  // (or the reverse). Higgsfield then rejects the pair as "Invalid credentials".
+  const hfId = rows.find((r) => r.name === "hfApiKeyId");
+  const hfSecret = rows.find((r) => r.name === "hfApiKeySecret");
+  const mixedHiggsfieldSources = !!hfId && !!hfSecret && hfId.source !== "none" && hfSecret.source !== "none" && hfId.source !== hfSecret.source;
 
   if (!enabled) {
     return (
@@ -45,6 +63,8 @@ export function ApiKeysForm({ rows, enabled, durable }: { rows: KeyRow[]; enable
           <span>No durable database is configured (set DATABASE_URL to a Postgres database), so saved keys live in temporary storage and can disappear on a redeploy or cold start.</span>
         </p>
       ) : null}
+
+      {mixedHiggsfieldSources ? <MixedSourcesWarning /> : null}
 
       <ul className="flex flex-col gap-4">
         {rows.map((r) => (
