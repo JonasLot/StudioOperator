@@ -10,6 +10,8 @@ export function proxy(req: NextRequest) {
   if (passcode.length < MIN_PASSCODE_LENGTH) return NextResponse.next();
 
   const { pathname, search } = req.nextUrl;
+  // The client portal is reached by clients through an unguessable per-job token, not the operator's session.
+  if (pathname.startsWith("/c/")) return NextResponse.next();
   const signedIn = verifySession(req.cookies.get(SESSION_COOKIE)?.value, passcode) !== null;
 
   if (pathname === "/login") {

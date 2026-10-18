@@ -4,7 +4,9 @@ import type {
   ApprovalRequest,
   AuditEntry,
   AutonomySettings,
+  ClientFeedback,
   ClientMemory,
+  ClientShare,
   Escalation,
   Generation,
   IntakeAnalysis,
@@ -97,6 +99,14 @@ export interface StudioRepository {
   listSettings(): Promise<{ key: string; value: string; updatedAt: string }[]>; // everything except login throttling rows
   setSetting(key: string, value: string): Promise<void>;
   deleteSetting(key: string): Promise<void>;
+
+  // --- client portal ---
+  getClientShareByJob(jobId: string): Promise<ClientShare | null>; // newest, revoked or not
+  getClientShareByToken(token: string): Promise<ClientShare | null>;
+  insertClientShare(s: ClientShare): Promise<void>;
+  updateClientShare(id: string, patch: Partial<Omit<ClientShare, "id" | "jobId" | "token">>): Promise<void>;
+  listClientFeedback(jobId: string): Promise<ClientFeedback[]>;
+  insertClientFeedback(f: ClientFeedback): Promise<void>;
 
   countJobs(): Promise<number>;
   wipe(): Promise<void>;

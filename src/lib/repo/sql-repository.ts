@@ -9,7 +9,9 @@ import type {
   ApprovalRequest,
   AuditEntry,
   AutonomySettings,
+  ClientFeedback,
   ClientMemory,
+  ClientShare,
   Escalation,
   Generation,
   IntakeAnalysis,
@@ -80,6 +82,8 @@ const SPEC = {
   message: { bool: ["autoAllowed"] },
   audit: {},
   escalation: {},
+  share: {},
+  feedback: {},
 } satisfies Record<string, FieldSpec>;
 
 // Additive column migrations for databases created before a column existed.
@@ -408,10 +412,30 @@ export class SqlStudioRepository implements StudioRepository {
     await this.exec("DELETE FROM app_secrets WHERE name = ?", [name]);
   }
 
+  // --- client portal ---
+  async getClientShareByJob(jobId: string) {
+    return await this.one<ClientShare>("SELECT * FROM client_shares WHERE job_id = ? ORDER BY created_at DESC LIMIT 1", SPEC.share, jobId);
+  }
+  async getClientShareByToken(token: string) {
+    return await this.one<ClientShare>("SELECT * FROM client_shares WHERE token = ?", SPEC.share, token);
+  }
+  async insertClientShare(s: ClientShare) {
+    await this.insert("client_shares", s, SPEC.share);
+  }
+  async updateClientShare(id: string, patch: Partial<Omit<ClientShare, "id" | "jobId" | "token">>) {
+    await this.patch("client_shares", id, patch, SPEC.share);
+  }
+  async listClientFeedback(jobId: string) {
+    return await this.all<ClientFeedback>(`SELECT * FROM client_feedback WHERE job_id = ? ORDER BY created_at, id`, SPEC.feedback, jobId);
+  }
+  async insertClientFeedback(f: ClientFeedback) {
+    await this.insert("client_feedback", f, SPEC.feedback);
+  }
+
   async wipe() {
     await this.ready;
     await this.db.exec(
-      "DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
+      "DELETE FROM client_feedback; DELETE FROM client_shares; DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
     );
   }
 }

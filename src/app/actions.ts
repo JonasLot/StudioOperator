@@ -10,6 +10,7 @@ import * as agency from "@/lib/services/agency";
 import { GuardrailError } from "@/lib/services/guardrails";
 import { authEnabled, clearLoginFailures, endSession, loginBlockedForMs, recordLoginFailure, requireSession, startSession } from "@/lib/auth";
 import { safeNextPath } from "@/lib/auth/session";
+import * as clientPortal from "@/lib/services/client-portal";
 import * as intake from "@/lib/services/intake";
 import * as studio from "@/lib/services/studio";
 import { mockSetting, saveProfile, setMockSetting } from "@/lib/settings";
@@ -140,6 +141,12 @@ export async function addRevisionAction(jobId: string, note: string, deliverable
 }
 export async function runRevisionAction(jobId: string, revisionId: string) {
   return run(jobId, () => studio.runRevision(jobId, revisionId), "Revision running.");
+}
+export async function createClientLinkAction(jobId: string) {
+  return run(jobId, () => clientPortal.ensureClientShare(jobId), "Client link created.");
+}
+export async function revokeClientLinkAction(jobId: string) {
+  return run(jobId, () => clientPortal.revokeClientShare(jobId), "Client link revoked.");
 }
 export async function approveDeliveryAction(jobId: string, attestation: string) {
   return run(jobId, () => studio.approveFinalDelivery(jobId, attestation), "Final delivery approved.");

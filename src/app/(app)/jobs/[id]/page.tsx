@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock, FileText, Gavel, Images, ListOrdered, MessageSquareDiff, Receipt } from "lucide-react";
+import { ArrowLeft, Clock, FileText, Gavel, Images, ListOrdered, MessageSquareDiff, Receipt, Share2 } from "lucide-react";
 import { ProductionPoller } from "@/components/poller";
 import { StatusPill } from "@/components/job-pipeline";
 import { publicConfig } from "@/lib/config";
 import { SOURCE_LABEL } from "@/lib/domain/types";
 import { ensureSeeded } from "@/lib/seed";
+import { operatorClientView } from "@/lib/services/client-portal";
 import { getBundle, profitabilityFor } from "@/lib/services/studio";
 import { daysUntil, shortDate, usd } from "@/lib/utils";
 import { ActivityLog } from "./activity-log";
 import { ApprovalTimeline } from "./approval-timeline";
 import { PrimaryAction } from "./primary-action";
 import { BriefTab } from "./brief-tab";
+import { ClientTab } from "./client-tab";
 import { CostsTab } from "./costs-tab";
 import { DecisionTab } from "./decision-tab";
 import { JobTabs } from "./job-tabs";
@@ -24,7 +26,7 @@ import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
-const TABS = ["brief", "decision", "workflow", "costs", "outputs", "revisions"] as const;
+const TABS = ["brief", "decision", "workflow", "costs", "outputs", "revisions", "client"] as const;
 
 export default async function JobPage(props: PageProps<"/jobs/[id]">) {
   await loadRuntimeConfig();
@@ -34,6 +36,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
   const bundle = await getBundle(id);
   if (!bundle) notFound();
   const { job, analysis, intake, workflow, generations, revisions, approvals } = bundle;
+  const client = await operatorClientView(id);
   const p = profitabilityFor(bundle);
   const cfg = publicConfig();
   const pending = approvals.filter((a) => a.status === "pending");
@@ -96,6 +99,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
               { value: "costs", label: "Costs", icon: <Receipt />, content: <CostsTab jobId={job.id} workflow={workflow} generations={generations} revisions={revisions} profitability={p} /> },
               { value: "outputs", label: "Outputs", icon: <Images />, count: completed || undefined, content: <OutputsTab job={job} workflow={workflow} generations={generations} revisions={revisions} /> },
               { value: "revisions", label: "Revisions", icon: <MessageSquareDiff />, count: revisions.length || undefined, content: <RevisionsTab job={job} analysis={analysis} revisions={revisions} profitability={p} generations={generations} /> },
+              { value: "client", label: "Client", icon: <Share2 />, count: client.feedback.length || undefined, content: <ClientTab job={job} share={client.share} feedback={client.feedback} /> },
             ]}
           />
         </div>
