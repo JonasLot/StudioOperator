@@ -68,7 +68,7 @@ export default async function SettingsPage() {
                 detail={
                   !process.env.VERCEL
                     ? "Local SQLite file on this machine's disk."
-                    : "Temporary local storage. Anything saved here (jobs, keys, profile, mock mode) can disappear on a redeploy or cold start, and each server instance has its own copy. Set DATABASE_URL to a Postgres database (Vercel: Storage → Neon) to make it stick."
+                    : "Temporary local storage. Anything saved here (jobs, keys, profile, mock mode) can disappear on a redeploy or cold start, and each server instance has its own copy. Set DATABASE_URL to a Postgres database (e.g. Supabase) to make it stick."
                 }
               />
             ) : (

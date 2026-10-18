@@ -39,11 +39,28 @@ Point the app at a real database instead. The backend is picked automatically, i
 
 All three run the same repository code and the same portable schema; tables are created on first start.
 
-**Postgres on Vercel (about two minutes):** open the project's **Storage** tab, create a **Neon** database
-(Marketplace) and connect it to the project. Vercel adds `DATABASE_URL` / `POSTGRES_URL` to the environment by
-itself; redeploy, and Settings → Connections should read *Database · Postgres*. Any other Postgres works too
-(Supabase, RDS, a local server): paste its connection string into `DATABASE_URL`. Pick a region near your
-Vercel functions.
+**Postgres with Supabase (about two minutes):** create a project at supabase.com in a region near your
+Vercel functions, open **Connect** and copy the **Transaction pooler** string (port 6543; use the Session pooler on
+a long-running server). Set it as `DATABASE_URL` in `.env.local` and in the Vercel project's Environment Variables:
+
+```
+DATABASE_URL=postgres://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=no-verify
+```
+
+`sslmode=no-verify` avoids *"self-signed certificate in certificate chain"* from `pg` (the connection is still
+encrypted). URL-encode special characters in the password (`@`, `:`, `/`, `#`). Redeploy, and Settings →
+Connections should read *Database · Postgres*. The app only uses Supabase as plain Postgres, so no Supabase client,
+auth or RLS setup is needed. Any other Postgres (Neon, RDS, a local server) works the same way: paste its
+connection string into `DATABASE_URL`.
+
+**Moving data from another Postgres:**
+
+```bash
+pg_dump --no-owner --no-privileges "$OLD_DATABASE_URL" > studio-backup.sql
+psql "$NEW_DATABASE_URL" < studio-backup.sql
+```
+
+Use the Supabase **direct** or **Session pooler** string (port 5432) for the restore, not the Transaction pooler.
 
 **Turso:**
 
