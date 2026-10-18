@@ -98,6 +98,8 @@ export interface StudioRepository {
   getSetting(key: string): Promise<string | null>;
   listSettings(): Promise<{ key: string; value: string; updatedAt: string }[]>; // everything except login throttling rows
   setSetting(key: string, value: string): Promise<void>;
+  /** Atomically take `key` if nobody holds it or the holder's claim is older than `staleMs`. True when taken. */
+  claimSetting(key: string, value: string, staleMs: number): Promise<boolean>;
   deleteSetting(key: string): Promise<void>;
 
   // --- client portal ---

@@ -102,30 +102,40 @@ export const MIGRATIONS = [
  * schema version (see SqlDriver.applySchema) before the first statement runs.
  */
 export class SqlStudioRepository implements StudioRepository {
-  private ready: Promise<void>;
+  private ready: Promise<void> | null = null;
   // Insertion order for tables ordered "as written": SQLite has rowid, Postgres has the explicit seq column.
   private readonly seq: string;
 
   constructor(private db: SqlDriver) {
     this.seq = db.dialect === "postgres" ? "seq" : "rowid";
-    const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/repo/schema.sql"), "utf8");
-    this.ready = db.applySchema(schema, MIGRATIONS, schemaVersion(schema, MIGRATIONS));
-    // A failed start must be retried on the next call rather than poisoning every later one.
-    this.ready.catch(() => {});
+    void this.start().catch(() => {});
+  }
+
+  /** Applies the schema once; a failed start is dropped so the next call retries instead of failing forever. */
+  private start(): Promise<void> {
+    if (!this.ready) {
+      const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/repo/schema.sql"), "utf8");
+      const attempt = this.db.applySchema(schema, MIGRATIONS, schemaVersion(schema, MIGRATIONS));
+      this.ready = attempt;
+      attempt.catch(() => {
+        if (this.ready === attempt) this.ready = null;
+      });
+    }
+    return this.ready;
   }
 
   private async rows(sql: string, params: unknown[] = []): Promise<Row[]> {
-    await this.ready;
+    await this.start();
     return this.db.query(sql, params);
   }
 
   private async exec(sql: string, params: unknown[] = []): Promise<void> {
-    await this.ready;
+    await this.start();
     await this.db.run(sql, params);
   }
 
   async transaction<T>(fn: () => Promise<T>): Promise<T> {
-    await this.ready;
+    await this.start();
     return this.db.transaction(fn);
   }
 
@@ -378,7 +388,7 @@ export class SqlStudioRepository implements StudioRepository {
     return row ? String(row.value) : null;
   }
   async listSettings() {
-    return (await this.rows("SELECT key, value, updated_at FROM app_settings WHERE key NOT LIKE 'login:%'")).map((r) => ({
+    return (await this.rows("SELECT key, value, updated_at FROM app_settings WHERE key NOT LIKE 'login:%' AND key NOT LIKE 'seed:%'")).map((r) => ({
       key: String(r.key),
       value: String(r.value),
       updatedAt: String(r.updated_at),
@@ -389,6 +399,14 @@ export class SqlStudioRepository implements StudioRepository {
       "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
       [key, value, new Date().toISOString()],
     );
+  }
+  async claimSetting(key: string, value: string, staleMs: number) {
+    const now = Date.now();
+    const rows = await this.rows(
+      "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at WHERE app_settings.updated_at < ? RETURNING key",
+      [key, value, new Date(now).toISOString(), new Date(now - staleMs).toISOString()],
+    );
+    return rows.length > 0;
   }
   async deleteSetting(key: string) {
     await this.exec("DELETE FROM app_settings WHERE key = ?", [key]);
@@ -433,7 +451,7 @@ export class SqlStudioRepository implements StudioRepository {
   }
 
   async wipe() {
-    await this.ready;
+    await this.start();
     await this.db.exec(
       "DELETE FROM client_feedback; DELETE FROM client_shares; DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
     );

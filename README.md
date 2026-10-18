@@ -53,6 +53,18 @@ Connections should read *Database · Postgres*. The app only uses Supabase as pl
 auth or RLS setup is needed. Any other Postgres (Neon, RDS, a local server) works the same way: paste its
 connection string into `DATABASE_URL`.
 
+**Seed the demo data once (recommended for a remote database):** the first page view of an empty database seeds
+the demo jobs, which takes minutes over a remote connection, longer than a serverless function may run. Do it once
+from your own machine instead; the app then finds data and skips seeding:
+
+```bash
+# .env.local with DATABASE_URL pointing at the new database, then:
+npm run db:seed              # asks before it wipes the database
+```
+
+If several serverless instances start on an empty database at once, only one seeds it (`seed:claim` in
+`app_settings`). The script is also the way to repair a half-seeded database.
+
 **Moving data from another Postgres:**
 
 ```bash

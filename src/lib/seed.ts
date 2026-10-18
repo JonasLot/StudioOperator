@@ -340,6 +340,9 @@ export async function seedDemo() {
   await repo.insertActivity({ id: `ev_seed${Date.now()}`, jobId: libraryId, actor: "operator", message: "Lead pasted from direct email. Not analysed yet.", createdAt: t });
 }
 
+const SEED_CLAIM = "seed:claim";
+const SEED_CLAIM_TTL_MS = 10 * 60_000;
+
 const g = globalThis as unknown as { __studioSeed?: Promise<void> };
 
 export async function ensureSeeded() {
@@ -347,7 +350,16 @@ export async function ensureSeeded() {
   if (!g.__studioSeed) {
     g.__studioSeed = (async () => {
       try {
-        if (await getRepo().countJobs() === 0) await seedDemo();
+        const repo = getRepo();
+        // Several serverless instances can see an empty database at once; only the one that wins the claim seeds it.
+        if ((await repo.countJobs()) === 0 && (await repo.claimSetting(SEED_CLAIM, new Date().toISOString(), SEED_CLAIM_TTL_MS))) {
+          try {
+            await seedDemo();
+          } catch (err) {
+            await repo.deleteSetting(SEED_CLAIM).catch(() => {});
+            throw err;
+          }
+        }
       } catch (err) {
         // Seeding is best-effort demo data — never let a partial seed take down
         // the whole app (e.g. when a provider cannot complete generations).
