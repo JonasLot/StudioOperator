@@ -100,6 +100,17 @@ function meetsResolution(m: RouterModel, input: RouteInput): boolean {
   return need === null || have === null || have >= need;
 }
 
+/** Seconds one attempt covers: from the unit label ("per 5s clip"), else the max duration, else 5. */
+function clipSeconds(m: RouterModel): number {
+  const fromLabel = m.unitLabel.match(/(\d+)\s*s\b/);
+  return fromLabel ? Number(fromLabel[1]) : m.maxDurationSec ?? 5;
+}
+
+/** Clips needed to cover the requested duration with this model (at least 1). */
+function clipCount(m: RouterModel, input: RouteInput): number {
+  return Math.max(1, Math.ceil((input.durationSec ?? 0) / clipSeconds(m)));
+}
+
 /** Candidate models for a role, filtered by medium compatibility and ranked best-first. */
 function candidates(role: RouterRole, input: RouteInput): RouterModel[] {
   const pool = ROUTER_CATALOG.filter((m) => m.role === role).filter((m) => {
@@ -164,10 +175,12 @@ export function proposeRoute(input: RouteInput): RoutePlan {
 
   const ship = candidates("ship", input);
   if (ship.length) {
+    const clips = input.medium === "video" ? clipCount(ship[0], input) : 1;
+    const shipAttempts = input.medium === "video" ? clips * keep * 2 : keep;
     stages.push({
       key: "ship", role: "ship", title: input.medium === "video" ? "Generate the final motion" : "Generate the final asset",
       why: input.talking ? "Premium talking / native-audio lane for the final cut." : input.medium === "video" ? "Premium motion/cinematic lane for the client-facing cut." : "Premium image lane for the final client-facing still.",
-      selectedId: ship[0].id, candidateIds: ship.map((m) => m.id), estimatedAttempts: input.medium === "video" ? keep * 2 : keep, optional: false,
+      selectedId: ship[0].id, candidateIds: ship.map((m) => m.id), estimatedAttempts: shipAttempts, optional: false,
     });
     // Optional repair of a single continuity failure, on the same premium lane.
     stages.push({

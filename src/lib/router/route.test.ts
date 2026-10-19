@@ -71,6 +71,13 @@ test("SHIP honours the requested resolution (4K does not land on a 1080p-max mod
   assert.ok(ROUTER_CATALOG.find((m) => m.id === hd.selectedId)!.maxResolution !== "720p");
 });
 
+test("SHIP attempts scale with duration: 60s on 5s clips = 12 clips x keep x 2 takes", () => {
+  const long = proposeRoute(input({ durationSec: 60 })).stages.find((s) => s.key === "ship")!;
+  assert.equal(long.estimatedAttempts, 12 * 2 * 2);
+  const short = proposeRoute(input({ durationSec: 5 })).stages.find((s) => s.key === "ship")!;
+  assert.equal(short.estimatedAttempts, 1 * 2 * 2);
+});
+
 test("FINISH prefers a quality upscaler for 4K, the cheap one for HD", () => {
   const finishOf = (resolution: string) => proposeRoute(input({ resolution })).stages.filter((s) => s.key === "finish").at(-1)!.selectedId;
   assert.equal(finishOf("4K"), "topaz-video");
