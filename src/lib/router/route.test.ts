@@ -57,9 +57,24 @@ test("CONTROL respects exact-text + identity needs", () => {
   const model = ROUTER_CATALOG.find((m) => m.id === control.selectedId)!;
   assert.ok(model.controls.text && (model.controls.reference || model.controls.identity)); // text + packaging + reference
   const best = byRole("control")
-    .filter((m) => m.controls.text && (m.controls.reference || m.controls.identity))
+    .filter((m) => m.medium === "image" && m.controls.text && (m.controls.reference || m.controls.identity))
     .sort((a, b) => a.costPerAttemptUsd - b.costPerAttemptUsd)[0];
-  assert.equal(control.selectedId, best.id); // cheapest model that satisfies both needs
+  assert.equal(control.selectedId, best.id); // cheapest generator that satisfies both needs
+  assert.notEqual(model.medium, "image_edit"); // inpaint models (need a mask) are alternatives only
+});
+
+test("SHIP honours the requested resolution (4K does not land on a 1080p-max model)", () => {
+  const ship = proposeRoute(input({ resolution: "4K" })).stages.find((s) => s.key === "ship")!;
+  assert.equal(ship.selectedId, "kling-3-0");
+  assert.equal(ROUTER_CATALOG.find((m) => m.id === ship.selectedId)!.maxResolution, "4k");
+  const hd = proposeRoute(input({ resolution: "1080p" })).stages.find((s) => s.key === "ship")!;
+  assert.ok(ROUTER_CATALOG.find((m) => m.id === hd.selectedId)!.maxResolution !== "720p");
+});
+
+test("FINISH prefers a quality upscaler for 4K, the cheap one for HD", () => {
+  const finishOf = (resolution: string) => proposeRoute(input({ resolution })).stages.filter((s) => s.key === "finish").at(-1)!.selectedId;
+  assert.equal(finishOf("4K"), "topaz-video");
+  assert.equal(finishOf("1080p"), "video-upscale");
 });
 
 test("economics: optional repair is excluded from estimate but included in max authorized spend", () => {
