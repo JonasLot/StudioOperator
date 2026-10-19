@@ -83,6 +83,23 @@ function score(m: RouterModel, input: RouteInput): number {
   return s;
 }
 
+/** Rough pixel-height rank of a resolution label ("4K", "1080p", ...); null when unparseable. */
+function resolutionRank(label: string | null | undefined): number | null {
+  if (!label) return null;
+  const s = label.trim().toLowerCase();
+  const k = s.match(/^(\d+(?:\.\d+)?)\s*k$/);
+  if (k) return Number(k[1]) * 1000;
+  const p = s.match(/^(\d+)\s*p?$/);
+  return p ? Number(p[1]) : null;
+}
+
+/** True when the model can deliver the requested resolution (unknown limits count as capable). */
+function meetsResolution(m: RouterModel, input: RouteInput): boolean {
+  const need = resolutionRank(input.resolution);
+  const have = resolutionRank(m.maxResolution);
+  return need === null || have === null || have >= need;
+}
+
 /** Candidate models for a role, filtered by medium compatibility and ranked best-first. */
 function candidates(role: RouterRole, input: RouteInput): RouterModel[] {
   const pool = ROUTER_CATALOG.filter((m) => m.role === role).filter((m) => {
@@ -91,16 +108,35 @@ function candidates(role: RouterRole, input: RouteInput): RouterModel[] {
     if (role === "ship") return input.medium === "video" ? m.medium === "video" || m.medium === "audio_video" : m.medium === "image";
     return false;
   });
+  // SEARCH is rough exploration, so the final resolution does not constrain it.
+  const resolutionMatters = role !== "search";
   return pool.sort((a, b) => {
+    if (resolutionMatters) {
+      const dr = Number(meetsResolution(b, input)) - Number(meetsResolution(a, input));
+      if (dr !== 0) return dr;
+    }
     const ds = score(b, input) - score(a, input);
     if (ds !== 0) return ds;
-    return role === "search" ? a.costPerAttemptUsd - b.costPerAttemptUsd : a.costPerAttemptUsd - b.costPerAttemptUsd;
+    // Edit/inpaint models need an existing image and mask, so they are alternatives, not the default.
+    const de = Number(a.medium === "image_edit") - Number(b.medium === "image_edit");
+    if (de !== 0) return de;
+    return a.costPerAttemptUsd - b.costPerAttemptUsd;
   });
 }
 
-function finishCandidates(kind: "upscale" | "voice", medium: RouteInput["medium"] = "video"): RouterModel[] {
+function finishCandidates(kind: "upscale" | "voice", input?: RouteInput): RouterModel[] {
+  const medium = input?.medium ?? "video";
   const media = kind === "voice" ? ["voice"] : medium === "image" ? ["upscale_image"] : ["upscale"];
-  return ROUTER_CATALOG.filter((m) => m.role === "finish" && media.includes(m.medium)).sort((a, b) => a.costPerAttemptUsd - b.costPerAttemptUsd);
+  const pool = ROUTER_CATALOG.filter((m) => m.role === "finish" && media.includes(m.medium));
+  const high = kind === "upscale" && (resolutionRank(input?.resolution) ?? 0) >= 2000;
+  return pool.sort((a, b) => {
+    // Delivering 2K/4K: prefer the quality upscalers over the fast/cheap social ones.
+    if (high) {
+      const dq = Number(b.speed !== "fast") - Number(a.speed !== "fast");
+      if (dq !== 0) return dq;
+    }
+    return a.costPerAttemptUsd - b.costPerAttemptUsd;
+  });
 }
 
 export function proposeRoute(input: RouteInput): RoutePlan {
@@ -142,10 +178,10 @@ export function proposeRoute(input: RouteInput): RoutePlan {
   }
 
   if (input.talking) {
-    const v = finishCandidates("voice");
+    const v = finishCandidates("voice", input);
     if (v.length) stages.push({ key: "finish", role: "finish", title: "Voice", why: "Record the voice track for the approved picture.", selectedId: v[0].id, candidateIds: v.map((m) => m.id), estimatedAttempts: keep, optional: false });
   }
-  const up = finishCandidates("upscale", input.medium);
+  const up = finishCandidates("upscale", input);
   if (up.length) {
     stages.push({
       key: "finish", role: "finish", title: "Upscale, grade & export (QA)",
