@@ -111,6 +111,12 @@ function clipCount(m: RouterModel, input: RouteInput): number {
   return Math.max(1, Math.ceil((input.durationSec ?? 0) / clipSeconds(m)));
 }
 
+/** Estimated SHIP attempts for a model: video covers the duration clip by clip, two takes per kept concept. */
+export function shipAttemptsFor(m: RouterModel, input: RouteInput): number {
+  const keep = Math.max(1, input.keep);
+  return input.medium === "video" ? clipCount(m, input) * keep * 2 : keep;
+}
+
 /** Candidate models for a role, filtered by medium compatibility and ranked best-first. */
 function candidates(role: RouterRole, input: RouteInput): RouterModel[] {
   const pool = ROUTER_CATALOG.filter((m) => m.role === role).filter((m) => {
@@ -175,8 +181,7 @@ export function proposeRoute(input: RouteInput): RoutePlan {
 
   const ship = candidates("ship", input);
   if (ship.length) {
-    const clips = input.medium === "video" ? clipCount(ship[0], input) : 1;
-    const shipAttempts = input.medium === "video" ? clips * keep * 2 : keep;
+    const shipAttempts = shipAttemptsFor(ship[0], input);
     stages.push({
       key: "ship", role: "ship", title: input.medium === "video" ? "Generate the final motion" : "Generate the final asset",
       why: input.talking ? "Premium talking / native-audio lane for the final cut." : input.medium === "video" ? "Premium motion/cinematic lane for the client-facing cut." : "Premium image lane for the final client-facing still.",
