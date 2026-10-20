@@ -10,6 +10,7 @@ export interface RequestSpec {
   duration?: number; // seconds, sent as `duration`
   resolution?: string; // sent as `resolution`
   aspectRatios?: readonly string[]; // allowed `aspect_ratio` values; the first is the fallback
+  imageField?: string; // image-to-video models: the body field that takes the (first) reference image URL
   extra?: Record<string, unknown>; // any other fixed body fields
 }
 
@@ -21,7 +22,7 @@ export interface RequestInput {
 
 /** Whether the model takes reference images: models without a spec send { prompt, image_urls? }, models with one send only their documented fields. */
 export function acceptsImageUrls(spec: RequestSpec | undefined): boolean {
-  return !spec;
+  return !spec || spec.imageField !== undefined;
 }
 
 /** "16x9", "16/9" and "16×9" all mean "16:9". */
@@ -33,7 +34,7 @@ export function normalizeAspectRatio(raw: string | null | undefined): string | n
 
 /**
  * The body to POST. Models without a spec keep the original shape ({ prompt, image_urls? }); models with a
- * spec send exactly the documented fields. The requested aspect ratio is used when the model allows it,
+ * spec send exactly the documented fields (plus the first reference image under `imageField`, when set). The requested aspect ratio is used when the model allows it,
  * otherwise the model's first allowed ratio.
  */
 export function buildRequestBody(spec: RequestSpec | undefined, input: RequestInput): Record<string, unknown> {
@@ -45,5 +46,6 @@ export function buildRequestBody(spec: RequestSpec | undefined, input: RequestIn
     const wanted = normalizeAspectRatio(input.aspectRatio);
     body.aspect_ratio = wanted && spec.aspectRatios.includes(wanted) ? wanted : spec.aspectRatios[0];
   }
+  if (spec.imageField && input.imageUrls?.length) body[spec.imageField] = input.imageUrls[0];
   return { ...body, ...spec.extra };
 }

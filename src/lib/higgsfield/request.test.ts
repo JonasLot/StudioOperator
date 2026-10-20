@@ -46,4 +46,11 @@ test("normalizeAspectRatio accepts common spellings", () => {
 test("only models without a body spec take reference images", () => {
   assert.equal(acceptsImageUrls(undefined), true);
   assert.equal(acceptsImageUrls({ duration: 5 }), false);
+  assert.equal(acceptsImageUrls({ duration: 5, imageField: "image_url" }), true);
+});
+
+test("imageField puts the first reference image into the body", () => {
+  const spec: RequestSpec = { duration: 5, imageField: "image_url" };
+  assert.deepEqual(buildRequestBody(spec, { prompt: "p", imageUrls: ["https://a/1.png", "https://a/2.png"] }), { prompt: "p", duration: 5, image_url: "https://a/1.png" });
+  assert.deepEqual(buildRequestBody(spec, { prompt: "p" }), { prompt: "p", duration: 5 });
 });
