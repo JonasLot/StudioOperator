@@ -103,8 +103,9 @@ export const MODEL_CATALOG: CatalogModel[] = [
     id: "seedance-2-5-ref",
     label: "Seedance 2.5 · reference to video",
     category: "video",
-    endpoint: "/bytedance/seedance-2-5/reference-to-video",
-    verified: false,
+    // The documented path uses dots ("seedance-2.5"); the earlier dashed spelling answered 404 model_not_found.
+    endpoint: "/bytedance/seedance-2.5/reference-to-video",
+    verified: true,
     unitCostUsd: 0.9,
     unitLabel: "per 5s clip",
     output: "video",

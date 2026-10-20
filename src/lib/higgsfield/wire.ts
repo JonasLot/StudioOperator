@@ -70,7 +70,13 @@ export async function wireSubmit(input: { generationId: string; modelId: string;
       body: JSON.stringify(buildRequestBody(model.request, { prompt: input.prompt, imageUrls: input.imageUrls, aspectRatio: input.aspectRatio })),
       cache: "no-store",
     });
-    if (!res.ok) throw new Error(`Higgsfield submit failed: ${await readError(res)}`);
+    if (!res.ok) {
+      const detail = await readError(res);
+      const hint = res.status === 404 && /model_not_found/.test(detail)
+        ? ` — ${model.label} (${model.endpoint}) is not a model Higgsfield serves at that path for this account. Choose another model for the step (Edit → Model), or correct the endpoint in the catalog.`
+        : "";
+      throw new Error(`Higgsfield submit failed: ${detail}${hint}`);
+    }
     const body = (await res.json()) as { request_id: string; status_url?: string; cancel_url?: string; status?: GenerationStatus };
     return {
       providerRequestId: body.request_id,
