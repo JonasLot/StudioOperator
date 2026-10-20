@@ -4,6 +4,7 @@
 import type { Analysis } from "@/lib/analysis/schema";
 import type { FinalDecision } from "@/lib/analysis/decision";
 import type { BriefFacts } from "@/lib/analysis/view";
+import type { BriefMessage, BriefStatus, CreativeBrief } from "@/lib/creative/brief";
 
 export const JOB_SOURCES = ["upwork", "fiverr", "contra", "email", "direct"] as const;
 export type JobSource = (typeof JOB_SOURCES)[number];
@@ -449,4 +450,32 @@ export interface ClientFeedback {
   body: string;
   revisionId: string | null;
   createdAt: string;
+}
+
+/** The creative direction for a job: drafted by the first-phase model, sharpened with Astra, then locked. */
+export interface CreativeBriefRecord {
+  id: string;
+  jobId: string;
+  status: BriefStatus;
+  brief: CreativeBrief;
+  thread: BriefMessage[]; // the sparring conversation with Astra
+  drafter: string; // who wrote the first draft, e.g. "llama3.2" or "mock-draft"
+  lockedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A production-ready prompt saved for reuse. {{variables}} in the body are filled from the job on insert. */
+export interface SavedPrompt {
+  id: string;
+  name: string;
+  category: ModelCategory;
+  modelId: string | null; // catalog model it was proven on, when known
+  tags: string[];
+  body: string;
+  notes: string | null;
+  uses: number;
+  sourceJobId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { getRepo } from "@/lib/repo";
-import { parseMockSetting, resolveMockForced, resolveMockMode, type MockSetting, type Profile } from "./rules";
+import { parseDraftModel, parseMockSetting, resolveMockForced, resolveMockMode, type DraftModel, type MockSetting, type Profile } from "./rules";
 
 // ---------------------------------------------------------------------------
 // Settings edited in the UI, stored in the database: the operator profile and the
@@ -89,3 +89,12 @@ export async function saveProfile(profile: Profile) {
 
 /** The name approvals and audit entries are recorded under. */
 export const operatorName = () => getProfile().displayName;
+
+// --- first-phase AI endpoint ---
+
+/** The endpoint and model saved on the Settings page, or null (then the environment variables apply). */
+export const draftModelSetting = (): DraftModel | null => parseDraftModel(read("draftModel"));
+
+export async function saveDraftModel(value: DraftModel | null) {
+  await write("draftModel", value ? JSON.stringify(value) : null);
+}

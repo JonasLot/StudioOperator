@@ -4,13 +4,14 @@ import { CheckCircle2, CircleSlash, FlaskConical, PlugZap, RotateCcw, Store } fr
 import { resetDemoAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { ApiKeysForm } from "./api-keys-form";
+import { DraftModelForm } from "./draft-model-form";
 import { MockModeForm } from "./mock-mode-form";
 import { Button } from "@/components/ui/button";
-import { astraLive, config, higgsfieldLive } from "@/lib/config";
+import { astraLive, config, draftLive, higgsfieldLive } from "@/lib/config";
 import { SOURCE_LABEL, type JobSource } from "@/lib/domain/types";
 import { storageKind } from "@/lib/repo";
 import { adminPasscode, secretStatus, storageIsDurable } from "@/lib/secrets";
-import { mockSetting, mockSettingSavedAt } from "@/lib/settings";
+import { draftModelSetting, mockSetting, mockSettingSavedAt } from "@/lib/settings";
 import { MANUAL_MARKETPLACE_STEPS } from "@/lib/services/marketplace-policy";
 import { pct } from "@/lib/utils";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
@@ -60,6 +61,11 @@ export default async function SettingsPage() {
           ) : null}
           <ul className="divide-y">
             <Conn name={`Brief analysis · ${config.openai.model}`} ok={astraLive()} detail={astraKey ? (astraLive() ? "Live" : "Key present · disabled by mock mode") : "No OpenAI API key · offline analyzer in use"} />
+            <Conn
+              name={`First-phase AI · ${config.draft.model || "not set"}`}
+              ok={draftLive()}
+              detail={config.draft.baseUrl && config.draft.model ? (draftLive() ? `Live · ${config.draft.baseUrl}` : "Set · disabled by mock mode") : "No endpoint · offline drafter in use"}
+            />
             <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No Higgsfield key · simulated provider in use"} />
             {storageKind() === "sqlite" ? (
               <Conn
@@ -85,6 +91,9 @@ export default async function SettingsPage() {
         </Card>
         <Card title="Mock mode">
           <MockModeForm savedAt={(() => { const t = mockSettingSavedAt(); return t ? `${new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC` : null; })()} durable={storageIsDurable()} current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
+        </Card>
+        <Card title="First-phase AI">
+          <DraftModelForm baseUrl={config.draft.baseUrl} model={config.draft.model} saved={draftModelSetting() !== null} enabled={adminPasscode() !== null} />
         </Card>
         <Card title="API keys">
           <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} durable={storageIsDurable()} />

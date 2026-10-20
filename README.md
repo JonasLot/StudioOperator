@@ -146,6 +146,31 @@ analysis and the human-edited version are stored for comparison. Tests for the s
 responses, missing fields, the deterministic decision rules, the derived view and the plan live
 beside the code (`src/lib/analysis/*.test.ts`); run them with `npm test`.
 
+## Creative brief (first-phase AI, then Astra)
+
+The **Workflow** tab starts with a *Creative brief* card: a short, structured creative direction (logline, audience, tone,
+visual direction, key messages, must-haves, things to avoid, open questions) for the job.
+
+1. **Draft** — a cheap or local model writes the first draft from the client's brief. It talks to any OpenAI-compatible
+   `/chat/completions` endpoint (Ollama, LM Studio, OpenRouter, OpenAI), set under *Settings → First-phase AI* or with
+   `DRAFT_AI_BASE_URL` / `DRAFT_AI_MODEL` (key optional). Its answer is coerced into the brief shape before it is stored
+   (`src/lib/creative/brief.ts`). With no endpoint, or if the call fails, a deterministic offline drafter is used and the
+   fallback is noted in the thread. A local endpoint only works when the server can reach it, so run the app locally for that.
+2. **Spar** — you talk it through with Astra (same Responses API and Structured Outputs as the intake analysis). Each answer
+   returns the *whole* revised brief plus a short reply, so the stored brief is always complete. *Let Astra review it* does the
+   same with no message. You can also edit any field by hand; unsaved edits are saved before Astra sees them.
+3. **Lock** — a locked brief is appended to every step prompt submitted from then on (`Creative direction`, `Tone`, `Look`,
+   `Audience`, `Must include`, `Avoid`; open questions are never sent). A draft is never used for paid generations.
+
+## Prompt library (`/prompts`)
+
+Production-ready prompts, saved once and reused on any job. Save from a step's editor (*Save this prompt to the library*),
+from an approved take (the bookmark on the take saves the prompt that produced it, minus its take number), or write one on
+the page. In a step's editor, *Insert from library…* lists the prompts for that kind of step (image, video, …), most used first.
+Prompts may contain `{{variables}}` — `{{logline}}`, `{{tone}}`, `{{visual_direction}}`, `{{audience}}`, `{{key_messages}}`,
+`{{must_haves}}`, `{{avoid}}`, `{{brief}}`, `{{format}}` — which are filled from the job when inserted; any other variable stays
+as written and is flagged until you fill it in. The library is not tied to a job and is not wiped by *Reset demo*.
+
 ## Model router (transparent)
 
 The **Model router** screen proposes a staged route for a brief and explains it — it is not a black box.
@@ -238,6 +263,7 @@ All checks run server-side; the UI only reflects them.
 - **Secrets**: read only in `src/lib/config.ts` (`server-only`). The browser receives a `publicConfig()` without keys.
 - **Providers**:
   - `src/lib/analysis/astra.ts` — Astra via the OpenAI Responses API with Structured Outputs, validated with zod; falls back to the offline analyzer (`mock.ts`) and logs a warning if the call fails.
+  - `src/lib/creative/draft.ts` — the first-phase drafter over OpenAI-compatible chat completions; `src/lib/creative/spar.ts` — Astra sparring on the brief.
   - `src/lib/higgsfield/provider.ts` — live adapter following docs.higgsfield.ai (`POST /{model endpoint}`, `Authorization: Key id:secret`, `Idempotency-Key`, poll `status_url`; statuses `queued | in_progress | completed | failed | nsfw | canceled`) and a deterministic mock provider.
 - **Production loop**: `tick()` polls in-flight requests, settles steps, submits the next step within the cap, and moves the job to QA. In the demo the open tab drives it every 2s; in deployment, call `tickAllGenerating()` from a worker or a Higgsfield webhook.
 

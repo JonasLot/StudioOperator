@@ -12,13 +12,18 @@ import { cleanEnvSecret, cleanSecretInput, decryptSecret, encryptSecret, MIN_PAS
 // last four characters.
 // ---------------------------------------------------------------------------
 
-export type SecretName = "openaiApiKey" | "hfApiKeyId" | "hfApiKeySecret";
+export type SecretName = "openaiApiKey" | "hfApiKeyId" | "hfApiKeySecret" | "draftApiKey";
 
 export const SECRET_DEFS: Record<SecretName, { label: string; description: string; env: string[] }> = {
   openaiApiKey: {
     label: "OpenAI API key",
     description: "Brief analysis (GPT-6 Astra). Without it the offline analyzer is used.",
     env: ["OPENAI_API_KEY", "ASTRA_API_KEY"],
+  },
+  draftApiKey: {
+    label: "First-phase AI key (optional)",
+    description: "Only for hosted endpoints such as OpenRouter. A local model (Ollama, LM Studio) needs none.",
+    env: ["DRAFT_AI_API_KEY"],
   },
   hfApiKeyId: {
     label: "Higgsfield API key ID",

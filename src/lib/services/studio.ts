@@ -25,6 +25,7 @@ import { getRepo } from "@/lib/repo";
 import { describeKeyShape } from "@/lib/secrets/crypto";
 import { secretStatus } from "@/lib/secrets";
 import { audit } from "./audit";
+import { creativeDirectionFor } from "./creative";
 import { computeProfitability } from "./economics";
 import {
   GuardrailError,
@@ -359,10 +360,12 @@ export async function reopenJob(jobId: string) {
 // Production
 // ---------------------------------------------------------------------------
 
-function promptFor(step: WorkflowStep, analysis: BriefView | null, attempt: number, extra?: string) {
+/** `creative` is the locked creative brief as prompt text ("" when there is none; see creativeDirectionFor). */
+function promptFor(step: WorkflowStep, analysis: BriefView | null, attempt: number, creative: string, extra?: string) {
   const parts = [
     step.purpose,
     step.inputs.length ? `Inputs: ${step.inputs.join("; ")}` : "",
+    creative,
     analysis ? `Brief: ${analysis.summary}` : "",
     analysis?.dimensions.length ? `Format: ${analysis.dimensions.join(", ")}` : "",
     analysis?.brandConstraints.length ? `Constraints: ${analysis.brandConstraints.slice(0, 3).join(" ")}` : "",
@@ -558,7 +561,7 @@ export async function tick(jobId: string) {
       if (!completed.some((g) => g.selected)) await repo.updateGeneration(completed[0].id, { selected: true });
       await log(jobId, "agent", `“${step.name}” finished: ${completed.length}/${sg.length} attempts usable.`);
     } else if (sg.length < step.estimatedAttempts + MAX_AUTO_RETRIES) {
-      const r = await submitGeneration(job, wf, step, sg.length + 1, promptFor(step, analysis, sg.length + 1, "Retry after failure."), null, step.unitCost);
+      const r = await submitGeneration(job, wf, step, sg.length + 1, promptFor(step, analysis, sg.length + 1, await creativeDirectionFor(jobId), "Retry after failure."), null, step.unitCost);
       if (r === "over_budget") await blockForBudget(job, wf, step, step.unitCost);
       else await log(jobId, "agent", `All attempts failed on “${step.name}”; retrying within budget.`);
     } else {
@@ -592,8 +595,9 @@ export async function tick(jobId: string) {
         await blockForBudget(job, fresh, next, needed);
       } else {
         await repo.updateStep(next.id, { status: "running" });
+        const creative = await creativeDirectionFor(jobId);
         for (let i = 1; i <= next.estimatedAttempts; i++) {
-          await submitGeneration(job, fresh, next, i, promptFor(next, analysis, i), null, next.unitCost);
+          await submitGeneration(job, fresh, next, i, promptFor(next, analysis, i, creative), null, next.unitCost);
         }
         await log(jobId, "agent", `Submitted ${next.estimatedAttempts} attempts for “${next.name}” on ${getModel(next.modelId).label}.`);
       }
@@ -797,7 +801,7 @@ export async function retryStep(jobId: string, stepId: string) {
   const step = wf.steps.find((s) => s.id === stepId);
   if (!step || step.status !== "failed") throw new GuardrailError("Only failed steps can be retried.");
   await repo.updateStep(stepId, { status: "running" });
-  const r = await submitGeneration(job, wf, step, (await repo.listGenerations(jobId)).filter((g) => g.stepId === stepId).length + 1, promptFor(step, await getBrief(jobId), 99, "Operator-requested retry."), null, step.unitCost);
+  const r = await submitGeneration(job, wf, step, (await repo.listGenerations(jobId)).filter((g) => g.stepId === stepId).length + 1, promptFor(step, await getBrief(jobId), 99, await creativeDirectionFor(jobId), "Operator-requested retry."), null, step.unitCost);
   if (r === "over_budget") await blockForBudget(job, wf, step, step.unitCost);
   if (job.status !== "generating") await repo.updateJob(jobId, { status: "generating" });
   await log(jobId, "operator", `Retried “${step.name}”.`);
@@ -867,7 +871,7 @@ export async function retryGeneration(jobId: string, generationId: string) {
   const attempt = (await repo.listGenerations(jobId)).filter((x) => x.stepId === step.id).length + 1;
   if (job.status !== "generating") await repo.updateJob(jobId, { status: "generating" });
   if (step.status === "failed" || step.status === "blocked") await repo.updateStep(step.id, { status: "running" });
-  const r = await submitGeneration(job, wf, step, attempt, promptFor(step, await getBrief(jobId), attempt, "Operator-requested retry of a prior attempt."), g.revisionId, step.unitCost);
+  const r = await submitGeneration(job, wf, step, attempt, promptFor(step, await getBrief(jobId), attempt, await creativeDirectionFor(jobId), "Operator-requested retry of a prior attempt."), g.revisionId, step.unitCost);
   if (r === "over_budget") await blockForBudget(job, wf, step, step.unitCost);
   await log(jobId, "operator", `Retried take ${g.attempt} as a new attempt on “${step.name}”.`);
 }
@@ -954,7 +958,7 @@ export async function runRevision(jobId: string, revisionId: string) {
   }
   const pseudoStep: WorkflowStep = { ...step, modelId: rev.modelId, unitCost: unit, purpose: rev.actionSummary };
   for (let i = 1; i <= rev.attempts; i++) {
-    await submitGeneration(job, wf, pseudoStep, i, promptFor(pseudoStep, await getBrief(jobId), i, `Client note: ${rev.clientNote}`), rev.id, unit);
+    await submitGeneration(job, wf, pseudoStep, i, promptFor(pseudoStep, await getBrief(jobId), i, await creativeDirectionFor(jobId), `Client note: ${rev.clientNote}`), rev.id, unit);
   }
   await log(jobId, "agent", `Running revision: ${rev.actionSummary}`);
 }

@@ -7,11 +7,13 @@ import type {
   ClientFeedback,
   ClientMemory,
   ClientShare,
+  CreativeBriefRecord,
   Escalation,
   Generation,
   IntakeAnalysis,
   Job,
   Revision,
+  SavedPrompt,
   StoredAsset,
   Workflow,
   WorkflowStep,
@@ -109,6 +111,19 @@ export interface StudioRepository {
   updateClientShare(id: string, patch: Partial<Omit<ClientShare, "id" | "jobId" | "token">>): Promise<void>;
   listClientFeedback(jobId: string): Promise<ClientFeedback[]>;
   insertClientFeedback(f: ClientFeedback): Promise<void>;
+
+  // --- creative brief (one per job) ---
+  getCreativeBrief(jobId: string): Promise<CreativeBriefRecord | null>;
+  upsertCreativeBrief(b: CreativeBriefRecord): Promise<void>;
+
+  // --- prompt library ---
+  listPrompts(): Promise<SavedPrompt[]>;
+  getPrompt(id: string): Promise<SavedPrompt | null>;
+  insertPrompt(p: SavedPrompt): Promise<void>;
+  updatePrompt(id: string, patch: Partial<Omit<SavedPrompt, "id" | "createdAt">>): Promise<void>;
+  deletePrompt(id: string): Promise<void>;
+  /** Count one more use without a read-modify-write, so two quick inserts do not lose one. */
+  bumpPromptUses(id: string): Promise<void>;
 
   countJobs(): Promise<number>;
   wipe(): Promise<void>;

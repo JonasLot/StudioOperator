@@ -49,3 +49,40 @@ export function initials(name: string): string {
   const letters = parts.length === 1 ? parts[0].slice(0, 1) : parts[0].slice(0, 1) + parts[parts.length - 1].slice(0, 1);
   return letters.toUpperCase();
 }
+
+// --- first-phase AI (drafts the creative brief) ---
+
+export interface DraftModel {
+  baseUrl: string;
+  model: string;
+}
+
+export type DraftModelResult = { ok: true; value: DraftModel } | { ok: false; errors: Partial<Record<keyof DraftModel, string>> };
+
+/** An OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, OpenAI) and the model to ask. */
+export function validateDraftModel(input: { baseUrl?: unknown; model?: unknown }): DraftModelResult {
+  const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const baseUrl = text(input.baseUrl).replace(/\/+$/, "");
+  const model = text(input.model);
+  const errors: Partial<Record<keyof DraftModel, string>> = {};
+  let url: URL | null = null;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    /* reported below */
+  }
+  if (!url || !/^https?:$/.test(url.protocol) || url.username || url.password) errors.baseUrl = "Use a full http(s) address, e.g. http://localhost:11434/v1 (no username or password in it).";
+  if (!model) errors.model = "Name the model, e.g. llama3.2.";
+  else if (model.length > 100) errors.model = "Keep the model name under 100 characters.";
+  return Object.keys(errors).length ? { ok: false, errors } : { ok: true, value: { baseUrl, model } };
+}
+
+export function parseDraftModel(raw: string | null | undefined): DraftModel | null {
+  if (!raw) return null;
+  try {
+    const r = validateDraftModel(JSON.parse(raw) as Record<string, unknown>);
+    return r.ok ? r.value : null;
+  } catch {
+    return null;
+  }
+}

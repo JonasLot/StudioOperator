@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Pencil } from "lucide-react";
-import { updateStepAction } from "@/app/actions";
+import { BookMarked, Pencil } from "lucide-react";
+import { markPromptUsedAction, savePromptAction, updateStepAction } from "@/app/actions";
 import { useServerAction } from "@/components/action-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ModelCategory } from "@/lib/domain/types";
+import { renderPrompt, unresolvedVariables, type PromptContext } from "@/lib/prompts/library";
 import { usd } from "@/lib/utils";
 
 export interface StepEditorModel {
@@ -33,11 +34,19 @@ export interface StepEditorStep {
   estimatedAttempts: number;
 }
 
+/** A saved prompt that fits this step's kind of model. */
+export interface PromptOption {
+  id: string;
+  name: string;
+  body: string;
+  uses: number;
+}
+
 const lines = (xs: string[]) => xs.join("\n");
 const split = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 
 /** Edit a step that has not started: prompt text, inputs, expected outputs, model and attempts. */
-export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string; step: StepEditorStep; models: StepEditorModel[]; maxAttempts: number }) {
+export function StepEditor({ jobId, step, models, maxAttempts, prompts, promptContext }: { jobId: string; step: StepEditorStep; models: StepEditorModel[]; maxAttempts: number; prompts: PromptOption[]; promptContext: PromptContext }) {
   const [open, setOpen] = React.useState(false);
   const { pending, error, exec, setError } = useServerAction();
   const [name, setName] = React.useState(step.name);
@@ -46,6 +55,8 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
   const [outputs, setOutputs] = React.useState(lines(step.expectedOutputs));
   const [modelId, setModelId] = React.useState(step.modelId);
   const [attempts, setAttempts] = React.useState(String(step.estimatedAttempts));
+  const [saving, setSaving] = React.useState<string | null>(null); // the name being typed when saving to the library
+  const [saved, setSaved] = React.useState(false);
 
   const model = models.find((m) => m.id === modelId);
   const unit = modelId === step.modelId ? step.unitCost : (model?.unitCostUsd ?? step.unitCost);
@@ -57,6 +68,26 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
       () => setOpen(false),
     );
   }
+
+  function insertPrompt(id: string) {
+    const p = prompts.find((x) => x.id === id);
+    if (!p) return;
+    setPurpose(renderPrompt(p.body, promptContext));
+    void markPromptUsedAction(id);
+  }
+
+  function saveToLibrary() {
+    if (saving === null) return;
+    exec(
+      () => savePromptAction({ name: saving, category: step.category, modelId, tags: "", body: purpose, notes: "" }, jobId),
+      () => {
+        setSaving(null);
+        setSaved(true);
+      },
+    );
+  }
+
+  const unresolved = unresolvedVariables(purpose);
 
   function reset() {
     setName(step.name);
@@ -106,9 +137,36 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
         </div>
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor={`${id}-purpose`}>Prompt / purpose</Label>
-        <Textarea id={`${id}-purpose`} value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label htmlFor={`${id}-purpose`}>Prompt / purpose</Label>
+          {prompts.length ? (
+            <div className="w-56">
+              <NativeSelect aria-label="Insert a saved prompt" className="h-7 text-xs" value="" onChange={(e) => insertPrompt(e.target.value)}>
+                <option value="">Insert from library…</option>
+                {prompts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.uses ? ` · used ${p.uses}×` : ""}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          ) : null}
+        </div>
+        <Textarea id={`${id}-purpose`} value={purpose} onChange={(e) => { setPurpose(e.target.value); setSaved(false); }} />
         <span className="text-[11px] text-muted-foreground">Sent to the model as the start of every prompt for this step, followed by the inputs and the brief.</span>
+        {unresolved.length ? <span className="text-[11px] text-warn">Fill in before running: {unresolved.map((v) => `{{${v}}}`).join(", ")}</span> : null}
+        {saving === null ? (
+          <button type="button" disabled={!purpose.trim() || saved} onClick={() => setSaving(name)} className="inline-flex w-fit items-center gap-1 text-[11.5px] text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-60">
+            <BookMarked className="size-3" /> {saved ? "Saved to the prompt library" : "Save this prompt to the library"}
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input aria-label="Prompt name" className="h-7 w-64 text-xs" value={saving} onChange={(e) => setSaving(e.target.value)} placeholder="Name, e.g. Hero bottle at dawn" />
+            <Button type="button" size="xs" disabled={pending || !saving.trim()} onClick={saveToLibrary}>Save</Button>
+            <Button type="button" size="xs" variant="ghost" onClick={() => setSaving(null)}>Cancel</Button>
+          </div>
+        )}
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="flex flex-col gap-1">

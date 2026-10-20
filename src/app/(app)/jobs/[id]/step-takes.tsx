@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Check, Loader2, TriangleAlert, X } from "lucide-react";
-import { reviewGenerationAction, setStepReviewAction } from "@/app/actions";
+import { BookMarked, Check, Loader2, TriangleAlert, X } from "lucide-react";
+import { reviewGenerationAction, savePromptFromTakeAction, setStepReviewAction } from "@/app/actions";
 import { useServerAction } from "@/components/action-button";
 import { groupRuns } from "@/lib/services/take-rounds";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ export interface TakeView {
 }
 
 /** A step's takes inline: preview and approve / reject without leaving the Workflow tab. */
-export function StepTakes({ jobId, takes, canReview }: { jobId: string; takes: TakeView[]; canReview: boolean }) {
+export function StepTakes({ jobId, takes, canReview, stepName }: { jobId: string; takes: TakeView[]; canReview: boolean; stepName: string }) {
   const { pending, error, exec } = useServerAction();
   if (!takes.length) return null;
   const runs = groupRuns(takes);
@@ -51,6 +51,7 @@ export function StepTakes({ jobId, takes, canReview }: { jobId: string; takes: T
         </div>
         <div className="flex items-center justify-between px-1.5 py-1 text-[11px]">
           <span className="tnum text-muted-foreground">Take {g.attempt}</span>
+          <span className="inline-flex items-center gap-1">
           {canReview && g.status === "completed" ? (
             <span className="inline-flex gap-1">
               <button type="button" disabled={pending} title="Approve" aria-label={`Approve take ${g.attempt}`} className={cn("grid size-5 place-items-center rounded border", g.reviewStatus === "approved" && "bg-ok/15 text-ok")} onClick={() => exec(() => reviewGenerationAction(jobId, g.id, g.reviewStatus === "approved" ? "pending" : "approved"))}>
@@ -63,6 +64,22 @@ export function StepTakes({ jobId, takes, canReview }: { jobId: string; takes: T
           ) : g.reviewStatus === "approved" ? (
             <span className="text-ok">Approved</span>
           ) : null}
+          {g.reviewStatus === "approved" && g.status === "completed" ? (
+            <button
+              type="button"
+              disabled={pending}
+              title="Save the prompt that produced this take to the prompt library"
+              aria-label={`Save the prompt of take ${g.attempt} to the library`}
+              className="grid size-5 place-items-center rounded border"
+              onClick={() => {
+                const name = window.prompt("Name for this prompt in the library", stepName);
+                if (name?.trim()) exec(() => savePromptFromTakeAction(jobId, g.id, name));
+              }}
+            >
+              <BookMarked className="size-3" />
+            </button>
+          ) : null}
+          </span>
         </div>
       </li>
     );
