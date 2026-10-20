@@ -162,6 +162,9 @@ visual direction, key messages, must-haves, things to avoid, open questions) for
 3. **Lock** — a locked brief is appended to every step prompt submitted from then on (`Creative direction`, `Tone`, `Look`,
    `Audience`, `Must include`, `Avoid`; open questions are never sent). A draft is never used for paid generations.
 
+In a step's editor, *Suggest from brief* (available once the brief is locked) has the first-phase model write that step's
+prompt from the creative direction. It only fills the editor; nothing is saved or generated until you save the step.
+
 ## Prompt library (`/prompts`)
 
 Production-ready prompts, saved once and reused on any job. Save from a step's editor (*Save this prompt to the library*),

@@ -83,3 +83,9 @@ export function mockSpar(current: CreativeBrief, message: string): SparResult {
     brief,
   };
 }
+
+/** Offline step-prompt suggestion: the step's own prompt followed by the brief's look and exclusions. */
+export function mockStepPrompt(purpose: string, brief: CreativeBrief): string {
+  const extra = [brief.logline, brief.visualDirection && `Look: ${brief.visualDirection}`, brief.tone && `Tone: ${brief.tone}`, brief.avoid.length && `Avoid: ${brief.avoid.join(", ")}`].filter(Boolean);
+  return [purpose.trim(), ...extra].join("\n");
+}

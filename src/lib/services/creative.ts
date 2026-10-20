@@ -2,6 +2,8 @@ import "server-only";
 import { coerceBrief, changedFields, creativeDirectionText, FIELD_LABEL, type BriefMessage, type CreativeBrief } from "@/lib/creative/brief";
 import { draftCreativeBrief } from "@/lib/creative/draft";
 import { sparOnBrief } from "@/lib/creative/spar";
+import { suggestStepPrompt, type StepPromptResult } from "@/lib/creative/step-prompt";
+import { getModel } from "@/lib/higgsfield/catalog";
 import type { CreativeBriefRecord, Job } from "@/lib/domain/types";
 import { getRepo } from "@/lib/repo";
 import { GuardrailError } from "./guardrails";
@@ -100,6 +102,19 @@ export async function unlockBrief(jobId: string) {
   if (!rec || rec.status !== "locked") throw new GuardrailError("The creative brief is not locked.");
   await getRepo().upsertCreativeBrief({ ...rec, status: "draft", lockedAt: null, updatedAt: now() });
   await log(jobId, "operator", "Unlocked the creative brief for changes.");
+}
+
+/** The first-phase model proposes a prompt for one step from the locked brief. Nothing is saved. */
+export async function suggestPromptForStep(jobId: string, stepId: string): Promise<StepPromptResult> {
+  await openJob(jobId);
+  const rec = await getCreativeBrief(jobId);
+  if (rec?.status !== "locked") throw new GuardrailError("Lock the creative brief first; prompts are suggested from it.");
+  const step = (await getRepo().getCurrentWorkflow(jobId))?.steps.find((s) => s.id === stepId);
+  if (!step) throw new GuardrailError("Step not found.");
+  return suggestStepPrompt(
+    { stepName: step.name, category: step.category, modelLabel: getModel(step.modelId).label, purpose: step.purpose, inputs: step.inputs, expectedOutputs: step.expectedOutputs },
+    rec.brief,
+  );
 }
 
 export type { CreativeBrief };

@@ -26,7 +26,7 @@ Answer with a single JSON object and nothing else, with exactly these keys:
 {"logline": string, "audience": string, "tone": string, "visualDirection": string, "keyMessages": string[], "mustHaves": string[], "avoid": string[], "openQuestions": string[]}
 logline: one sentence, what the piece is and why it exists. tone: a few words. visualDirection: palette, light, camera, texture. keyMessages: up to 3. mustHaves and avoid: concrete elements to include / keep out.`;
 
-async function request(body: Record<string, unknown>) {
+export async function chatRequest(body: Record<string, unknown>) {
   const key = config.draft.apiKey;
   return fetch(`${config.draft.baseUrl}/chat/completions`, {
     method: "POST",
@@ -48,8 +48,8 @@ async function draftWithModel(input: DraftInput): Promise<CreativeBrief> {
     ],
   };
   // Ask for JSON mode, but retry plainly if the endpoint rejects the parameter.
-  let res = await request({ ...body, response_format: { type: "json_object" } });
-  if (res.status === 400) res = await request(body);
+  let res = await chatRequest({ ...body, response_format: { type: "json_object" } });
+  if (res.status === 400) res = await chatRequest(body);
   if (!res.ok) throw new Error(`request failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
   const brief = coerceBrief(parseJsonLoose(extractChatText(await res.json())));
   if (!brief) throw new Error("the answer had no logline");

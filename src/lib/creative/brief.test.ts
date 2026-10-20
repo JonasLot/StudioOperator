@@ -60,3 +60,9 @@ test("chat helpers read content, fenced JSON and embedded JSON", () => {
   assert.deepEqual(parseJsonLoose('Sure! Here it is: {"a":1} hope it helps'), { a: 1 });
   assert.throws(() => parseJsonLoose("not json"), /not valid JSON/);
 });
+
+test("the offline step prompt keeps the step's own text and adds the brief's look and exclusions", async () => {
+  const { mockStepPrompt } = await import("./mock");
+  const out = mockStepPrompt(" Hero shot of the bottle ", { ...EMPTY_BRIEF, logline: "Dawn launch", tone: "calm", avoid: ["people"] });
+  assert.equal(out, "Hero shot of the bottle\nDawn launch\nTone: calm\nAvoid: people");
+});

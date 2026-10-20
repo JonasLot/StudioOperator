@@ -147,6 +147,7 @@ export function WorkflowTab({ job, workflow, generations, creative, analysis, pr
                     maxAttempts={config.economics.maxAttemptsPerStep}
                     prompts={prompts.filter((p) => p.category === s.category).map((p) => ({ id: p.id, name: p.name, body: p.body, uses: p.uses }))}
                     promptContext={promptContext}
+                    briefLocked={creative?.status === "locked"}
                   />
                   {s.status === "pending" && workflow.steps.length > 1 ? <RemoveStepButton jobId={job.id} stepId={s.id} /> : null}
                 </div>

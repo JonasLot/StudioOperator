@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { BookMarked, Pencil } from "lucide-react";
-import { markPromptUsedAction, savePromptAction, updateStepAction } from "@/app/actions";
+import { BookMarked, Pencil, Wand2 } from "lucide-react";
+import { markPromptUsedAction, savePromptAction, suggestStepPromptAction, updateStepAction } from "@/app/actions";
 import { useServerAction } from "@/components/action-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,7 @@ const lines = (xs: string[]) => xs.join("\n");
 const split = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 
 /** Edit a step that has not started: prompt text, inputs, expected outputs, model and attempts. */
-export function StepEditor({ jobId, step, models, maxAttempts, prompts, promptContext }: { jobId: string; step: StepEditorStep; models: StepEditorModel[]; maxAttempts: number; prompts: PromptOption[]; promptContext: PromptContext }) {
+export function StepEditor({ jobId, step, models, maxAttempts, prompts, promptContext, briefLocked }: { jobId: string; step: StepEditorStep; models: StepEditorModel[]; maxAttempts: number; prompts: PromptOption[]; promptContext: PromptContext; briefLocked: boolean }) {
   const [open, setOpen] = React.useState(false);
   const { pending, error, exec, setError } = useServerAction();
   const [name, setName] = React.useState(step.name);
@@ -67,6 +67,20 @@ export function StepEditor({ jobId, step, models, maxAttempts, prompts, promptCo
       () => updateStepAction(jobId, step.id, { name, purpose, inputs: split(inputs), expectedOutputs: split(outputs), modelId, estimatedAttempts: n }, mode),
       () => setOpen(false),
     );
+  }
+
+  const [suggesting, startSuggest] = React.useTransition();
+  const [suggestNote, setSuggestNote] = React.useState<string | null>(null);
+  function suggest() {
+    setSuggestNote(null);
+    startSuggest(async () => {
+      const r = await suggestStepPromptAction(jobId, step.id);
+      if (r.ok) {
+        setPurpose(r.prompt);
+        setSaved(false);
+        setSuggestNote(r.warning ?? "Suggested from the creative brief. Edit it, then save the step.");
+      } else setError(r.error);
+    });
   }
 
   function insertPrompt(id: string) {
@@ -139,6 +153,9 @@ export function StepEditor({ jobId, step, models, maxAttempts, prompts, promptCo
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor={`${id}-purpose`}>Prompt / purpose</Label>
+          <Button type="button" size="xs" variant="outline" disabled={suggesting || !briefLocked} title={briefLocked ? "Let the first-phase model write this prompt from the locked creative brief" : "Lock the creative brief first"} onClick={suggest}>
+            <Wand2 /> {suggesting ? "Suggesting…" : "Suggest from brief"}
+          </Button>
           {prompts.length ? (
             <div className="w-56">
               <NativeSelect aria-label="Insert a saved prompt" className="h-7 text-xs" value="" onChange={(e) => insertPrompt(e.target.value)}>
@@ -155,6 +172,7 @@ export function StepEditor({ jobId, step, models, maxAttempts, prompts, promptCo
         </div>
         <Textarea id={`${id}-purpose`} value={purpose} onChange={(e) => { setPurpose(e.target.value); setSaved(false); }} />
         <span className="text-[11px] text-muted-foreground">Sent to the model as the start of every prompt for this step, followed by the inputs and the brief.</span>
+        {suggestNote ? <span className="text-[11px] text-muted-foreground">{suggestNote}</span> : null}
         {unresolved.length ? <span className="text-[11px] text-warn">Fill in before running: {unresolved.map((v) => `{{${v}}}`).join(", ")}</span> : null}
         {saving === null ? (
           <button type="button" disabled={!purpose.trim() || saved} onClick={() => setSaving(name)} className="inline-flex w-fit items-center gap-1 text-[11.5px] text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-60">

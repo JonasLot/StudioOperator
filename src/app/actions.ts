@@ -170,6 +170,18 @@ export async function unlockBriefAction(jobId: string) {
   return run(jobId, () => creative.unlockBrief(jobId), "Creative brief unlocked.");
 }
 
+export async function suggestStepPromptAction(jobId: string, stepId: string): Promise<{ ok: true; prompt: string; warning: string | null } | { ok: false; error: string }> {
+  try {
+    await guard();
+    const r = await creative.suggestPromptForStep(jobId, stepId);
+    return { ok: true, prompt: r.prompt, warning: r.warning };
+  } catch (err) {
+    if (err instanceof GuardrailError) return { ok: false, error: err.message };
+    console.error(err);
+    return { ok: false, error: (err as Error).message || "Something went wrong." };
+  }
+}
+
 // --- prompt library ------------------------------------------------------------
 
 export type PromptFields = { name: string; category: string; modelId: string | null; tags: string; body: string; notes: string };
