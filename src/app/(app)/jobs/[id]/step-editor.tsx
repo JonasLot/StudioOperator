@@ -28,6 +28,7 @@ export interface StepEditorStep {
   inputs: string[];
   expectedOutputs: string[];
   modelId: string;
+  status: string;
   unitCost: number;
   estimatedAttempts: number;
 }
@@ -49,6 +50,13 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
   const model = models.find((m) => m.id === modelId);
   const unit = modelId === step.modelId ? step.unitCost : (model?.unitCostUsd ?? step.unitCost);
   const n = Math.max(0, Math.floor(Number(attempts) || 0));
+
+  function save(retry: boolean) {
+    exec(
+      () => updateStepAction(jobId, step.id, { name, purpose, inputs: split(inputs), expectedOutputs: split(outputs), modelId, estimatedAttempts: n }, retry),
+      () => setOpen(false),
+    );
+  }
 
   function reset() {
     setName(step.name);
@@ -73,10 +81,7 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
       className="col-span-full mt-1 flex w-full flex-col gap-3 rounded-lg border bg-background p-3 text-left"
       onSubmit={(e) => {
         e.preventDefault();
-        exec(
-          () => updateStepAction(jobId, step.id, { name, purpose, inputs: split(inputs), expectedOutputs: split(outputs), modelId, estimatedAttempts: n }),
-          () => setOpen(false),
-        );
+        save(false);
       }}
     >
       <div className="grid gap-3 md:grid-cols-[1fr_16rem_6rem]">
@@ -124,9 +129,14 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
           <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => { reset(); setOpen(false); }}>
             Cancel
           </Button>
-          <Button type="submit" size="sm" disabled={pending}>
+          <Button type="submit" size="sm" variant={step.status === "failed" ? "outline" : "default"} disabled={pending}>
             {pending ? "Saving…" : "Save step"}
           </Button>
+          {step.status === "failed" ? (
+            <Button type="button" size="sm" disabled={pending} onClick={() => save(true)}>
+              Save &amp; retry
+            </Button>
+          ) : null}
         </div>
       </div>
     </form>

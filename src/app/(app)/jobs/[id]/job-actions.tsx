@@ -1,7 +1,7 @@
 "use client";
 
-import { Play, RefreshCw, RotateCcw, Sparkles, X } from "lucide-react";
-import { analyzeAction, reopenJobAction, rejectJobAction, retryStepAction, startProductionAction } from "@/app/actions";
+import { Check, Play, Trash2, RefreshCw, RotateCcw, Sparkles, X } from "lucide-react";
+import { analyzeAction, approveStepOutputAction, removeStepAction, reopenJobAction, rejectJobAction, retryStepAction, startProductionAction } from "@/app/actions";
 import { ActionButton } from "@/components/action-button";
 
 export function AnalyzeButton({ jobId, label = "Re-run analysis", variant = "default" }: { jobId: string; label?: string; variant?: "default" | "outline" }) {
@@ -46,6 +46,22 @@ export function RetryStepButton({ jobId, stepId }: { jobId: string; stepId: stri
   return (
     <ActionButton size="xs" variant="outline" action={() => retryStepAction(jobId, stepId)}>
       <RefreshCw /> Retry
+    </ActionButton>
+  );
+}
+
+export function ApproveStepOutputButton({ jobId, stepId }: { jobId: string; stepId: string }) {
+  return (
+    <ActionButton size="xs" action={() => approveStepOutputAction(jobId, stepId)}>
+      <Check /> Approve picked take &amp; continue
+    </ActionButton>
+  );
+}
+
+export function RemoveStepButton({ jobId, stepId }: { jobId: string; stepId: string }) {
+  return (
+    <ActionButton size="xs" variant="ghost" confirm="Remove this step from the plan?" action={() => removeStepAction(jobId, stepId)}>
+      <Trash2 /> Remove
     </ActionButton>
   );
 }

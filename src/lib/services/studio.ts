@@ -37,6 +37,7 @@ import {
 import { newId } from "./ids";
 import { briefView, effectiveAnalysis, getBrief, runIntakeAnalysis } from "./intake";
 import { planRevision } from "./revisions";
+import { stepAwaitingReview } from "./review-gate";
 
 const now = () => new Date().toISOString();
 const MAX_AUTO_RETRIES = 2;
@@ -583,7 +584,9 @@ export async function tick(jobId: string) {
   const blocked = fresh.steps.some((s) => s.status === "blocked" || s.status === "failed");
   if (!running && !blocked) {
     const next = fresh.steps.find((s) => s.status === "pending");
-    if (next) {
+    if (next && stepAwaitingReview(fresh, gens, next)) {
+      // Wait for the operator to approve a take of the finished step; approving it releases the next step.
+    } else if (next) {
       const needed = next.unitCost * next.estimatedAttempts;
       if (!fitsBudget(fresh, gens, needed)) {
         await blockForBudget(job, fresh, next, needed);
@@ -650,6 +653,20 @@ export async function decideGenericApproval(jobId: string, approvalId: string, s
   });
 }
 
+/** Store a new plan estimate. Approved plans keep their cap; unapproved ones re-propose it and refresh the pending approval. */
+async function applyTotal(job: Job, wf: Workflow, total: number) {
+  const repo = getRepo();
+  if (wf.approvalStatus === "approved") {
+    await repo.updateWorkflow(wf.id, { estimatedTotalCost: total });
+    return;
+  }
+  const maxBudget = Math.ceil(total * (1 + job.contingencyPct));
+  await repo.updateWorkflow(wf.id, { estimatedTotalCost: total, maxBudget });
+  for (const a of (await repo.listApprovals(job.id)).filter((x) => x.status === "pending" && x.kind === "initial_workflow" && x.refId === wf.id)) {
+    await repo.updateApproval(a.id, { amount: maxBudget, reason: `Plan v${wf.version} with ${wf.steps.length} steps. Estimated spend $${total.toFixed(2)}.` });
+  }
+}
+
 export interface StepEdit {
   name: string;
   purpose: string;
@@ -667,7 +684,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * plan. Before approval the cap is re-proposed; after approval the new total must still fit under the approved
  * cap, otherwise the change is refused (raise the cap through a budget approval first).
  */
-export async function updateStep(jobId: string, stepId: string, edit: StepEdit) {
+export async function updateStep(jobId: string, stepId: string, edit: StepEdit, retry = false) {
   const repo = getRepo();
   const job = await repo.getJob(jobId);
   const wf = await repo.getCurrentWorkflow(jobId);
@@ -677,7 +694,8 @@ export async function updateStep(jobId: string, stepId: string, edit: StepEdit) 
   }
   const step = wf.steps.find((x) => x.id === stepId);
   if (!step) throw new GuardrailError("Step not found.");
-  if (step.status !== "pending") throw new GuardrailError("Only steps that have not started can be edited.");
+  if (!["pending", "failed", "blocked"].includes(step.status)) throw new GuardrailError("Only steps that have not started, or that failed or are paused, can be edited.");
+  if (retry && step.status !== "failed") throw new GuardrailError("Only a failed step can be retried after editing.");
 
   const name = edit.name.trim();
   const purpose = edit.purpose.trim();
@@ -712,18 +730,11 @@ export async function updateStep(jobId: string, stepId: string, edit: StepEdit) 
       estimatedTotalCost: stepCost,
     });
     if (!repriced) return;
-    if (wf.approvalStatus === "approved") {
-      await repo.updateWorkflow(wf.id, { estimatedTotalCost: total });
-    } else {
-      const maxBudget = Math.ceil(total * (1 + job.contingencyPct));
-      await repo.updateWorkflow(wf.id, { estimatedTotalCost: total, maxBudget });
-      for (const a of (await repo.listApprovals(jobId)).filter((x) => x.status === "pending" && x.kind === "initial_workflow" && x.refId === wf.id)) {
-        await repo.updateApproval(a.id, { amount: maxBudget, reason: `Plan v${wf.version} with ${wf.steps.length} steps. Estimated spend $${total.toFixed(2)}.` });
-      }
-    }
+    await applyTotal(job, wf, total);
     await audit({ jobId, kind: "cost_change", actor: "operator", summary: `Edited “${name}”: ${model.label}, ${attempts} attempt${attempts === 1 ? "" : "s"}; plan estimate now $${total.toFixed(2)}.`, costDeltaUsd: round2(total - wf.estimatedTotalCost) });
   });
   await log(jobId, "operator", `Edited step ${step.order} “${name}”${model.id !== step.modelId ? ` (model → ${model.label})` : ""}.`);
+  if (retry) await retryStep(jobId, stepId);
 }
 
 export async function retryStep(jobId: string, stepId: string) {
@@ -956,4 +967,100 @@ export async function providerConnectionTest(): Promise<{ ok: boolean; detail: s
   } catch (err) {
     return { ok: false, detail: scrubSecrets((err as Error).message), name: p.name, live: p.live };
   }
+}
+
+async function editablePlan(jobId: string) {
+  const repo = getRepo();
+  const job = await repo.getJob(jobId);
+  const wf = await repo.getCurrentWorkflow(jobId);
+  if (!job || !wf) throw new GuardrailError("No production plan exists for this job.");
+  if (wf.approvalStatus === "superseded" || wf.approvalStatus === "rejected" || ["rejected", "delivered"].includes(job.status)) {
+    throw new GuardrailError("This plan can no longer be edited.");
+  }
+  return { repo, job, wf };
+}
+
+/** Steps that have begun keep their place; new steps go after them. */
+const lastStartedOrder = (wf: Workflow) => wf.steps.filter((s) => s.status !== "pending").reduce((a, s) => Math.max(a, s.order), 0);
+
+export interface NewStep {
+  afterOrder: number; // 0 = first
+  name: string;
+  modelId: string;
+  purpose: string;
+  estimatedAttempts: number;
+}
+
+/** Add a step to a plan. It must come after every step that has already started, and (once approved) fit under the cap. */
+export async function addStep(jobId: string, input: NewStep) {
+  const { repo, job, wf } = await editablePlan(jobId);
+  const model = MODEL_CATALOG.find((m) => m.id === input.modelId);
+  if (!model) throw new GuardrailError("Unknown model.");
+  const name = input.name.trim();
+  const purpose = input.purpose.trim();
+  if (!name || !purpose) throw new GuardrailError("A step needs a name and a prompt / purpose.");
+  const attempts = Math.floor(input.estimatedAttempts);
+  if (!Number.isFinite(attempts) || attempts < 1 || attempts > config.economics.maxAttemptsPerStep) {
+    throw new GuardrailError(`Attempts must be between 1 and ${config.economics.maxAttemptsPerStep}.`);
+  }
+  const at = Math.max(Math.floor(input.afterOrder), lastStartedOrder(wf)) + 1;
+  const stepCost = round2(model.unitCostUsd * attempts);
+  const total = round2(wf.estimatedTotalCost + stepCost);
+  if (wf.approvalStatus === "approved" && total > wf.maxBudget) {
+    throw new GuardrailError(`Adding this step makes the estimate $${total.toFixed(2)}, above the approved cap ($${wf.maxBudget}). Raise the cap first.`);
+  }
+  await repo.transaction(async () => {
+    for (const s of wf.steps.filter((x) => x.order >= at)) await repo.updateStep(s.id, { order: s.order + 1 });
+    await repo.insertStep({
+      id: newId("st"),
+      workflowId: wf.id,
+      order: at,
+      name,
+      category: model.category,
+      modelId: model.id,
+      purpose,
+      inputs: [],
+      expectedOutputs: [],
+      deliverableIds: [],
+      estimatedAttempts: attempts,
+      unitCost: model.unitCostUsd,
+      estimatedTotalCost: stepCost,
+      status: "pending",
+    });
+    await applyTotal(job, wf, total);
+    await audit({ jobId, kind: "cost_change", actor: "operator", summary: `Added step “${name}” on ${model.label}; plan estimate now $${total.toFixed(2)}.`, costDeltaUsd: stepCost });
+  });
+  await log(jobId, "operator", `Added step ${at} “${name}”.`);
+}
+
+/** Remove a step that has not started. */
+export async function removeStep(jobId: string, stepId: string) {
+  const { repo, job, wf } = await editablePlan(jobId);
+  const step = wf.steps.find((s) => s.id === stepId);
+  if (!step) throw new GuardrailError("Step not found.");
+  if (step.status !== "pending") throw new GuardrailError("Only steps that have not started can be removed.");
+  if (wf.steps.length <= 1) throw new GuardrailError("A plan needs at least one step.");
+  const total = round2(wf.estimatedTotalCost - step.estimatedTotalCost);
+  await repo.transaction(async () => {
+    await repo.deleteStep(step.id);
+    for (const s of wf.steps.filter((x) => x.order > step.order)) await repo.updateStep(s.id, { order: s.order - 1 });
+    await applyTotal(job, wf, total);
+    await audit({ jobId, kind: "cost_change", actor: "operator", summary: `Removed step “${step.name}”; plan estimate now $${total.toFixed(2)}.`, costDeltaUsd: -step.estimatedTotalCost });
+  });
+  await log(jobId, "operator", `Removed step ${step.order} “${step.name}”.`);
+}
+
+/** Approve a finished step's takes (its picked ones, else its first usable one) so the next step can start. */
+export async function approveStepOutput(jobId: string, stepId: string) {
+  const repo = getRepo();
+  const wf = await repo.getCurrentWorkflow(jobId);
+  const step = wf?.steps.find((s) => s.id === stepId);
+  if (!wf || !step) throw new GuardrailError("Step not found.");
+  if (step.status !== "done") throw new GuardrailError("The step has not finished yet.");
+  const takes = (await repo.listGenerations(jobId)).filter((g) => g.stepId === stepId && !g.revisionId && g.status === "completed");
+  if (!takes.length) throw new GuardrailError("There are no usable takes to approve — retry the step.");
+  const picks = takes.some((g) => g.selected) ? takes.filter((g) => g.selected) : takes.slice(0, 1);
+  for (const g of picks) await repo.updateGeneration(g.id, { reviewStatus: "approved", selected: true });
+  await log(jobId, "operator", `Approved ${picks.length} take${picks.length === 1 ? "" : "s"} of “${step.name}”; the next step may start.`);
+  await tick(jobId);
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowRight, BadgeCheck, CircleDashed } from "lucide-react";
 import { ApprovalBadge, StepStatusBadge } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
@@ -6,12 +7,15 @@ import { CATEGORY_LABEL } from "@/lib/domain/types";
 import { config } from "@/lib/config";
 import { MODEL_CATALOG, getModel } from "@/lib/higgsfield/catalog";
 import { dateTime, usd } from "@/lib/utils";
-import { RetryStepButton, StartProductionButton } from "./job-actions";
+import { ApproveStepOutputButton, RemoveStepButton, RetryStepButton, StartProductionButton } from "./job-actions";
+import { AddStep } from "./step-add";
+import { stepAwaitingReview } from "@/lib/services/review-gate";
 import { StepEditor } from "./step-editor";
 
 export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow: Workflow | null; generations: Generation[] }) {
   if (!workflow) return <p className="rounded-xl border border-dashed bg-card px-4 py-6 text-[13px] text-muted-foreground">No production plan yet. Analyse the brief first.</p>;
   const editable = !["superseded", "rejected"].includes(workflow.approvalStatus) && !["rejected", "delivered"].includes(job.status);
+  const lastStarted = workflow.steps.filter((x) => x.status !== "pending").reduce((a, x) => Math.max(a, x.order), 0);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)] px-4 py-3">
@@ -34,7 +38,9 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
           const m = getModel(s.modelId);
           const sg = generations.filter((g) => g.stepId === s.id && !g.revisionId);
           const done = sg.filter((g) => g.status === "completed").length;
-          const canEdit = editable && s.status === "pending";
+          const canEdit = editable && ["pending", "failed", "blocked"].includes(s.status);
+          const nextStep = workflow.steps.find((x) => x.order > s.order && x.status === "pending");
+          const awaiting = job.status === "generating" && nextStep && stepAwaitingReview(workflow, generations, nextStep)?.id === s.id;
           const prev = workflow.steps.find((x) => x.order === s.order - 1);
           return (
             <li key={s.id} className="rounded-xl border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)]" data-step={s.order}>
@@ -73,22 +79,43 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                   {s.status === "failed" ? <span className="mt-1 self-end"><RetryStepButton jobId={job.id} stepId={s.id} /></span> : null}
                 </div>
               </div>
+              {awaiting ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/40 px-4 py-2 text-[12.5px]">
+                  <span>
+                    Waiting for you: approve a take of this step before “{nextStep!.name}” starts.{" "}
+                    <Link href={`/jobs/${job.id}?tab=outputs`} className="underline underline-offset-2">Review takes</Link>
+                  </span>
+                  <ApproveStepOutputButton jobId={job.id} stepId={s.id} />
+                </div>
+              ) : null}
               {canEdit ? (
-                <div className="flex flex-wrap border-t px-4 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2">
                   <StepEditor
                     jobId={job.id}
-                    step={{ id: s.id, name: s.name, category: s.category, purpose: s.purpose, inputs: s.inputs, expectedOutputs: s.expectedOutputs, modelId: s.modelId, unitCost: s.unitCost, estimatedAttempts: s.estimatedAttempts }}
+                    step={{ id: s.id, name: s.name, category: s.category, purpose: s.purpose, inputs: s.inputs, expectedOutputs: s.expectedOutputs, modelId: s.modelId, status: s.status, unitCost: s.unitCost, estimatedAttempts: s.estimatedAttempts }}
                     models={MODEL_CATALOG.filter((x) => x.category === s.category).map((x) => ({ id: x.id, label: x.label, unitCostUsd: x.unitCostUsd, unitLabel: x.unitLabel, verified: x.verified }))}
                     maxAttempts={config.economics.maxAttemptsPerStep}
                   />
+                  {s.status === "pending" && workflow.steps.length > 1 ? <RemoveStepButton jobId={job.id} stepId={s.id} /> : null}
                 </div>
               ) : null}
             </li>
           );
         })}
       </ol>
+      {editable ? (
+        <AddStep
+          jobId={job.id}
+          positions={[
+            ...(workflow.steps.some((x) => x.status !== "pending") ? [] : [{ afterOrder: 0, label: "First" }]),
+            ...workflow.steps.map((x) => ({ afterOrder: x.order, label: `Step ${x.order} · ${x.name}` })).filter((p) => p.afterOrder >= lastStarted),
+          ]}
+          models={MODEL_CATALOG.map((x) => ({ id: x.id, label: x.label, unitCostUsd: x.unitCostUsd, unitLabel: x.unitLabel, verified: x.verified, categoryLabel: CATEGORY_LABEL[x.category] }))}
+          maxAttempts={config.economics.maxAttemptsPerStep}
+        />
+      ) : null}
       <p className="text-xs text-muted-foreground">
-        Steps run in order; each feeds the next. The agent submits a step only if committed spend plus the step’s estimate fits under the approved cap — otherwise it pauses and asks you.
+        Steps run in order; each feeds the next, and a finished step hands on only the take you approve. The agent submits a step only if committed spend plus the step’s estimate fits under the approved cap — otherwise it pauses and asks you.
       </p>
     </div>
   );

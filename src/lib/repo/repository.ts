@@ -41,6 +41,8 @@ export interface StudioRepository {
   listCurrentWorkflows(): Promise<Workflow[]>;
   insertWorkflow(w: Workflow): Promise<void>; // inserts steps too
   updateWorkflow(id: string, patch: Partial<Omit<Workflow, "id" | "steps" | "jobId">>): Promise<void>;
+  insertStep(step: WorkflowStep): Promise<void>;
+  deleteStep(id: string): Promise<void>;
   updateStep(id: string, patch: Partial<Omit<WorkflowStep, "id" | "workflowId">>): Promise<void>;
 
   listGenerations(jobId: string): Promise<Generation[]>;
