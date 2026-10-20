@@ -146,10 +146,10 @@ export function mockAnalyze(input: AnalyzerInput): Analysis {
   const stills = deliverables.filter((d) => d.format === "still image");
   const renders = Math.max(video.length, 0);
   const keyframes = heroShots + stills.length * 2;
-  if (video.length || stills.length) add("image_keyframes", "Lock the visual language — lighting, palette, framing — as approved keyframes.", clamp(keyframes * 3, 4, 60));
+  if (video.length || stills.length) add("image_keyframes", "Lock the visual language — lighting, palette, framing — as approved keyframes.", clamp(keyframes * 2, 4, 12));
   if (exactText.length) add("text_frames", "Render client copy verbatim — supers, taglines and end card.", exactText.length * 3);
   if (video.some((d) => d.name.toLowerCase().includes("hero") || /cinematic|film|anamorphic|35mm/i.test(text)) && heroShots > 0)
-    add("hero_video", "Animate approved keyframes into hero shots with deliberate camera moves.", clamp(Math.ceil(heroShots * 2.5), 2, 60));
+    add("hero_video", "Animate approved keyframes into hero shots with deliberate camera moves.", clamp(Math.ceil(heroShots * 2), 2, 12));
   if (video.filter((d) => d.name.toLowerCase().includes("cutdown")).length) add("cutdown_video", "Vertical reframes and pickup shots for the social cutdowns.", 6);
   if (deliverables.some((d) => d.format === "voiceover")) add("voiceover", "Narration from the approved script with a stock synthetic voice.", 4);
   if (video.length) {
