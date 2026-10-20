@@ -2,7 +2,7 @@ import "server-only";
 import type { JobSource } from "@/lib/domain/types";
 import { secretValue } from "@/lib/secrets";
 import { normalizeHiggsfieldPair } from "@/lib/secrets/crypto";
-import { isMockForced, isMockMode, operatorName } from "@/lib/settings";
+import { draftModelSetting, isMockForced, isMockMode, operatorName } from "@/lib/settings";
 
 // Server-only configuration. Secrets are read here and never serialised to the client.
 // Anything the UI needs to know is exposed through publicConfig() without secret values.
@@ -61,6 +61,21 @@ export const config = {
     },
     baseUrl: (process.env.OPENAI_BASE_URL || process.env.ASTRA_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
     model: process.env.OPENAI_MODEL || process.env.ASTRA_MODEL || "gpt-6-astra",
+  },
+
+  // First-phase AI: a cheap or local model behind an OpenAI-compatible /chat/completions endpoint (Ollama,
+  // LM Studio, OpenRouter, OpenAI). It drafts the creative brief; Astra then sharpens it. The endpoint and
+  // model saved on the Settings page win over the environment; the key is optional (local models need none).
+  draft: {
+    get baseUrl() {
+      return draftModelSetting()?.baseUrl ?? (process.env.DRAFT_AI_BASE_URL || "").trim().replace(/\/+$/, "");
+    },
+    get model() {
+      return draftModelSetting()?.model ?? (process.env.DRAFT_AI_MODEL || "").trim();
+    },
+    get apiKey() {
+      return secretValue("draftApiKey");
+    },
   },
 
   // Higgsfield generation provider. Credentials are read here, server-side only,
@@ -165,6 +180,11 @@ export function astraLive() {
   return openaiLive();
 }
 
+/** Whether the first-phase AI drafts for real: an endpoint and a model are set and mock mode is not forced. */
+export function draftLive() {
+  return config.draft.baseUrl.length > 0 && config.draft.model.length > 0 && !isMockForced();
+}
+
 export function higgsfieldLive() {
   return !config.mockMode && config.higgsfield.apiKeyId.length > 0 && config.higgsfield.apiKeySecret.length > 0;
 }
@@ -174,7 +194,7 @@ export function higgsfieldLive() {
 // credentials must never appear anywhere outside the server-side fetch itself.
 export function scrubSecrets(input: string): string {
   let out = input;
-  for (const secret of [config.higgsfield.apiKeySecret, config.higgsfield.apiKeyId, config.openai.apiKey, config.turso.authToken]) {
+  for (const secret of [config.higgsfield.apiKeySecret, config.higgsfield.apiKeyId, config.openai.apiKey, config.draft.apiKey, config.turso.authToken]) {
     if (secret && secret.length >= 6) out = out.split(secret).join("«redacted»");
   }
   return out;
@@ -187,6 +207,8 @@ export function publicConfig() {
     openaiLive: openaiLive(),
     higgsfieldLive: higgsfieldLive(),
     astraModel: config.openai.model,
+    draftLive: draftLive(),
+    draftModel: config.draft.model,
     sourceFeePct: config.economics.sourceFeePct,
     defaultContingencyPct: config.economics.defaultContingencyPct,
     minGrossMarginPct: config.economics.minGrossMarginPct,

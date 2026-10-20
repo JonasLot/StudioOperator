@@ -7,6 +7,8 @@ import { publicConfig } from "@/lib/config";
 import { SOURCE_LABEL } from "@/lib/domain/types";
 import { ensureSeeded } from "@/lib/seed";
 import { operatorClientView } from "@/lib/services/client-portal";
+import { getCreativeBrief } from "@/lib/services/creative";
+import { listPrompts } from "@/lib/services/prompts";
 import { getBundle, profitabilityFor } from "@/lib/services/studio";
 import { daysUntil, shortDate, usd } from "@/lib/utils";
 import { ActivityLog } from "./activity-log";
@@ -36,7 +38,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
   const bundle = await getBundle(id);
   if (!bundle) notFound();
   const { job, analysis, intake, workflow, generations, revisions, approvals } = bundle;
-  const client = await operatorClientView(id);
+  const [client, creative, prompts] = await Promise.all([operatorClientView(id), getCreativeBrief(id), listPrompts()]);
   const p = profitabilityFor(bundle);
   const cfg = publicConfig();
   const pending = approvals.filter((a) => a.status === "pending");
@@ -95,7 +97,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
             tabs={[
               { value: "brief", label: "Brief", icon: <FileText />, content: <BriefTab job={job} analysis={analysis} /> },
               { value: "decision", label: "Decision", icon: <Gavel />, content: <DecisionTab job={job} analysis={analysis} workflow={workflow} profitability={p} /> },
-              { value: "workflow", label: "Workflow", icon: <ListOrdered />, count: workflow?.steps.length, content: <WorkflowTab job={job} workflow={workflow} generations={generations} /> },
+              { value: "workflow", label: "Workflow", icon: <ListOrdered />, count: workflow?.steps.length, content: <WorkflowTab job={job} workflow={workflow} generations={generations} creative={creative} analysis={analysis} prompts={prompts} /> },
               { value: "costs", label: "Costs", icon: <Receipt />, content: <CostsTab jobId={job.id} workflow={workflow} generations={generations} revisions={revisions} profitability={p} /> },
               { value: "outputs", label: "Outputs", icon: <Images />, count: completed || undefined, content: <OutputsTab job={job} workflow={workflow} generations={generations} revisions={revisions} /> },
               { value: "revisions", label: "Revisions", icon: <MessageSquareDiff />, count: revisions.length || undefined, content: <RevisionsTab job={job} analysis={analysis} revisions={revisions} profitability={p} generations={generations} /> },

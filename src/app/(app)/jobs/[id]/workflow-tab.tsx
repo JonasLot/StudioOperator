@@ -2,9 +2,10 @@ import Link from "next/link";
 import { ArrowRight, BadgeCheck, CircleDashed } from "lucide-react";
 import { ApprovalBadge, StepStatusBadge } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
-import type { Generation, Job, Workflow } from "@/lib/domain/types";
+import type { BriefView, CreativeBriefRecord, Generation, Job, SavedPrompt, Workflow } from "@/lib/domain/types";
 import { CATEGORY_LABEL } from "@/lib/domain/types";
-import { config } from "@/lib/config";
+import { astraLive, config, draftLive } from "@/lib/config";
+import type { PromptContext } from "@/lib/prompts/library";
 import { MODEL_CATALOG, getModel } from "@/lib/higgsfield/catalog";
 import { dateTime, usd } from "@/lib/utils";
 import { ApproveStepOutputButton, RemoveStepButton, RetryStepButton, StartProductionButton } from "./job-actions";
@@ -12,13 +13,49 @@ import { AddStep } from "./step-add";
 import { ReviewToggle, StepTakes } from "./step-takes";
 import { stepAwaitingReview } from "@/lib/services/review-gate";
 import { StepEditor } from "./step-editor";
+import { CreativeBriefCard } from "./creative-brief";
 
-export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow: Workflow | null; generations: Generation[] }) {
-  if (!workflow) return <p className="rounded-xl border border-dashed bg-card px-4 py-6 text-[13px] text-muted-foreground">No production plan yet. Analyse the brief first.</p>;
+/** What {{variables}} in a saved prompt are filled from: the creative brief and the analysed brief. */
+function promptContextFor(creative: CreativeBriefRecord | null, analysis: BriefView | null): PromptContext {
+  const b = creative?.brief;
+  return {
+    brief: analysis?.summary,
+    logline: b?.logline,
+    audience: b?.audience,
+    tone: b?.tone,
+    visual_direction: b?.visualDirection,
+    key_messages: b?.keyMessages.join("; "),
+    must_haves: b?.mustHaves.join("; "),
+    avoid: b?.avoid.join("; "),
+    format: analysis?.dimensions.join(", "),
+  };
+}
+
+export function WorkflowTab({ job, workflow, generations, creative, analysis, prompts }: { job: Job; workflow: Workflow | null; generations: Generation[]; creative: CreativeBriefRecord | null; analysis: BriefView | null; prompts: SavedPrompt[] }) {
+  const closed = ["rejected", "delivered"].includes(job.status);
+  const promptContext = promptContextFor(creative, analysis);
+  const briefCard = (
+    <CreativeBriefCard
+      jobId={job.id}
+      record={creative}
+      closed={closed}
+      drafterLabel={draftLive() ? config.draft.model : "the offline drafter"}
+      astraLabel={astraLive() ? config.openai.model : "offline stand-in"}
+    />
+  );
+  if (!workflow) {
+    return (
+      <div className="flex flex-col gap-4">
+        {briefCard}
+        <p className="rounded-xl border border-dashed bg-card px-4 py-6 text-[13px] text-muted-foreground">No production plan yet. Analyse the brief first.</p>
+      </div>
+    );
+  }
   const editable = !["superseded", "rejected"].includes(workflow.approvalStatus) && !["rejected", "delivered"].includes(job.status);
   const lastStarted = workflow.steps.filter((x) => x.status !== "pending").reduce((a, x) => Math.max(a, x.order), 0);
   return (
     <div className="flex flex-col gap-4">
+      {briefCard}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)] px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px]">
           <span className="font-medium">Plan v{workflow.version}</span>
@@ -58,6 +95,7 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                   <p className="mt-0.5 text-[13px] text-muted-foreground">{s.purpose}</p>
                   <StepTakes
                     jobId={job.id}
+                    stepName={s.name}
                     canReview={job.status === "generating" || job.status === "qa"}
                     takes={sg.map((g) => ({ id: g.id, attempt: g.attempt, status: g.status, outputUrl: g.outputUrl, outputType: g.outputType, reviewStatus: g.reviewStatus, selected: g.selected, error: g.error, prompt: g.prompt, createdAt: g.createdAt }))}
                   />
@@ -107,6 +145,9 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                     step={{ id: s.id, name: s.name, category: s.category, purpose: s.purpose, inputs: s.inputs, expectedOutputs: s.expectedOutputs, modelId: s.modelId, status: s.status, unitCost: s.unitCost, estimatedAttempts: s.estimatedAttempts }}
                     models={MODEL_CATALOG.filter((x) => x.category === s.category).map((x) => ({ id: x.id, label: x.label, unitCostUsd: x.unitCostUsd, unitLabel: x.unitLabel, verified: x.verified }))}
                     maxAttempts={config.economics.maxAttemptsPerStep}
+                    prompts={prompts.filter((p) => p.category === s.category).map((p) => ({ id: p.id, name: p.name, body: p.body, uses: p.uses }))}
+                    promptContext={promptContext}
+                    briefLocked={creative?.status === "locked"}
                   />
                   {s.status === "pending" && workflow.steps.length > 1 ? <RemoveStepButton jobId={job.id} stepId={s.id} /> : null}
                 </div>

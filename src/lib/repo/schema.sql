@@ -277,3 +277,32 @@ CREATE TABLE IF NOT EXISTS client_feedback (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_client_feedback_job ON client_feedback(job_id, created_at);
+
+-- Creative direction per job: the structured brief and the sparring thread (JSON as TEXT).
+CREATE TABLE IF NOT EXISTS creative_briefs (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  brief TEXT NOT NULL,
+  thread TEXT NOT NULL DEFAULT '[]',
+  drafter TEXT NOT NULL,
+  locked_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_creative_briefs_job ON creative_briefs(job_id);
+
+-- Reusable, production-ready prompts. Not tied to a job and not wiped by "reset demo data".
+CREATE TABLE IF NOT EXISTS saved_prompts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  model_id TEXT,
+  tags TEXT NOT NULL DEFAULT '[]',
+  body TEXT NOT NULL,
+  notes TEXT,
+  uses INTEGER NOT NULL DEFAULT 0,
+  source_job_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

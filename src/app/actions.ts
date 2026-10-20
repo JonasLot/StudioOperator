@@ -11,10 +11,12 @@ import { GuardrailError } from "@/lib/services/guardrails";
 import { authEnabled, clearLoginFailures, endSession, loginBlockedForMs, recordLoginFailure, requireSession, startSession } from "@/lib/auth";
 import { safeNextPath } from "@/lib/auth/session";
 import * as clientPortal from "@/lib/services/client-portal";
+import * as creative from "@/lib/services/creative";
+import * as prompts from "@/lib/services/prompts";
 import * as intake from "@/lib/services/intake";
 import * as studio from "@/lib/services/studio";
-import { mockSetting, saveProfile, setMockSetting } from "@/lib/settings";
-import { parseMockSetting, validateProfile, type Profile } from "@/lib/settings/rules";
+import { mockSetting, saveDraftModel, saveProfile, setMockSetting } from "@/lib/settings";
+import { parseMockSetting, validateDraftModel, validateProfile, type Profile } from "@/lib/settings/rules";
 import { SECRET_DEFS, SECRET_NAMES, adminPasscode, saveSecrets, verifyAdminPasscode, type SecretName } from "@/lib/secrets";
 
 import { loadRuntimeConfig } from "@/lib/runtime-config";
@@ -146,6 +148,70 @@ export async function cancelGenerationAction(jobId: string, generationId: string
 export async function retryGenerationAction(jobId: string, generationId: string) {
   return run(jobId, () => studio.retryGeneration(jobId, generationId), "Retrying as a new attempt.");
 }
+// --- creative brief: first-phase draft, sparring with Astra, lock -------------
+
+export async function draftBriefAction(jobId: string) {
+  let warning: string | null = null;
+  const r = await run(jobId, async () => {
+    warning = (await creative.draftBrief(jobId)).warning;
+  }, "Creative brief drafted.");
+  return r.ok && warning ? ({ ok: true, message: warning } as const) : r;
+}
+export async function sparBriefAction(jobId: string, message: string) {
+  return run(jobId, () => creative.sparBrief(jobId, message));
+}
+export async function saveBriefEditsAction(jobId: string, brief: unknown) {
+  return run(jobId, () => creative.saveBriefEdits(jobId, brief), "Creative brief saved.");
+}
+export async function lockBriefAction(jobId: string) {
+  return run(jobId, () => creative.lockBrief(jobId), "Creative brief locked.");
+}
+export async function unlockBriefAction(jobId: string) {
+  return run(jobId, () => creative.unlockBrief(jobId), "Creative brief unlocked.");
+}
+
+export async function suggestStepPromptAction(jobId: string, stepId: string): Promise<{ ok: true; prompt: string; warning: string | null } | { ok: false; error: string }> {
+  try {
+    await guard();
+    const r = await creative.suggestPromptForStep(jobId, stepId);
+    return { ok: true, prompt: r.prompt, warning: r.warning };
+  } catch (err) {
+    if (err instanceof GuardrailError) return { ok: false, error: err.message };
+    console.error(err);
+    return { ok: false, error: (err as Error).message || "Something went wrong." };
+  }
+}
+
+// --- prompt library ------------------------------------------------------------
+
+export type PromptFields = { name: string; category: string; modelId: string | null; tags: string; body: string; notes: string };
+
+export async function savePromptAction(input: PromptFields, sourceJobId: string | null = null) {
+  const r = await run(sourceJobId, () => prompts.savePrompt(input, sourceJobId), "Saved to the prompt library.");
+  revalidatePath("/prompts");
+  return r;
+}
+export async function savePromptFromTakeAction(jobId: string, generationId: string, name: string) {
+  const r = await run(jobId, () => prompts.savePromptFromTake(jobId, generationId, name, null), "Saved to the prompt library.");
+  revalidatePath("/prompts");
+  return r;
+}
+export async function updatePromptAction(id: string, input: PromptFields) {
+  const r = await run(null, () => prompts.updatePrompt(id, input), "Prompt updated.");
+  revalidatePath("/prompts");
+  return r;
+}
+export async function deletePromptAction(id: string) {
+  const r = await run(null, () => prompts.deletePrompt(id), "Prompt deleted.");
+  revalidatePath("/prompts");
+  return r;
+}
+export async function markPromptUsedAction(id: string) {
+  const r = await run(null, () => prompts.markPromptUsed(id));
+  revalidatePath("/prompts");
+  return r;
+}
+
 export async function connectionTestAction(): Promise<ActionResult & { detail?: string; providerName?: string; live?: boolean }> {
   await guard();
   const r = await studio.providerConnectionTest();
@@ -276,6 +342,35 @@ export async function saveApiKeysAction(_prev: ApiKeysState, form: FormData): Pr
   } catch (err) {
     console.error("Saving API keys failed:", (err as Error).name);
     return { error: "Could not save the keys. Check that the database is reachable." };
+  }
+}
+
+export type DraftModelState = { ok?: true; message?: string; error?: string } | undefined;
+
+/** Save (or clear) the endpoint and model of the first-phase AI. Needs the admin passcode, like API keys. */
+export async function saveDraftModelAction(_prev: DraftModelState, form: FormData): Promise<DraftModelState> {
+  await guard();
+  if (!adminPasscode()) {
+    return { error: "Saving here is switched off: set ADMIN_PASSCODE (12+ characters) in the server environment, or set DRAFT_AI_BASE_URL and DRAFT_AI_MODEL instead." };
+  }
+  if (!verifyAdminPasscode(String(form.get("passcode") ?? ""))) {
+    await new Promise((resolve) => setTimeout(resolve, 800)); // slow down guessing
+    return { error: "Wrong admin passcode." };
+  }
+  try {
+    if (form.get("clear") === "on") {
+      await saveDraftModel(null);
+      revalidatePath("/", "layout");
+      return { ok: true, message: "Cleared. The environment variables (if any) apply again." };
+    }
+    const r = validateDraftModel({ baseUrl: form.get("baseUrl"), model: form.get("model") });
+    if (!r.ok) return { error: Object.values(r.errors)[0] };
+    await saveDraftModel(r.value);
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Saved. Drafts now use ${r.value.model} at ${r.value.baseUrl}.` };
+  } catch (err) {
+    console.error("Saving the first-phase AI failed:", (err as Error).name);
+    return { error: "Could not save. Check that the database is reachable." };
   }
 }
 

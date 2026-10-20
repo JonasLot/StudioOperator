@@ -12,11 +12,13 @@ import type {
   ClientFeedback,
   ClientMemory,
   ClientShare,
+  CreativeBriefRecord,
   Escalation,
   Generation,
   IntakeAnalysis,
   Job,
   Revision,
+  SavedPrompt,
   StoredAsset,
   Workflow,
   WorkflowStep,
@@ -84,6 +86,8 @@ const SPEC = {
   escalation: {},
   share: {},
   feedback: {},
+  creative: { json: ["brief", "thread"] },
+  prompt: { json: ["tags"] },
 } satisfies Record<string, FieldSpec>;
 
 // Additive column migrations for databases created before a column existed.
@@ -439,10 +443,40 @@ export class SqlStudioRepository implements StudioRepository {
     await this.insert("client_feedback", f, SPEC.feedback);
   }
 
+  // --- creative brief ---
+  async getCreativeBrief(jobId: string) {
+    return await this.one<CreativeBriefRecord>("SELECT * FROM creative_briefs WHERE job_id = ?", SPEC.creative, jobId);
+  }
+  async upsertCreativeBrief(b: CreativeBriefRecord) {
+    const existing = await this.getCreativeBrief(b.jobId);
+    if (existing) await this.patch("creative_briefs", existing.id, { ...b, id: existing.id, createdAt: existing.createdAt }, SPEC.creative);
+    else await this.insert("creative_briefs", b, SPEC.creative);
+  }
+
+  // --- prompt library ---
+  async listPrompts() {
+    return await this.all<SavedPrompt>("SELECT * FROM saved_prompts ORDER BY uses DESC, updated_at DESC", SPEC.prompt);
+  }
+  async getPrompt(id: string) {
+    return await this.one<SavedPrompt>("SELECT * FROM saved_prompts WHERE id = ?", SPEC.prompt, id);
+  }
+  async insertPrompt(p: SavedPrompt) {
+    await this.insert("saved_prompts", p, SPEC.prompt);
+  }
+  async updatePrompt(id: string, patch: Partial<SavedPrompt>) {
+    await this.patch("saved_prompts", id, { ...patch, updatedAt: new Date().toISOString() }, SPEC.prompt);
+  }
+  async deletePrompt(id: string) {
+    await this.exec("DELETE FROM saved_prompts WHERE id = ?", [id]);
+  }
+  async bumpPromptUses(id: string) {
+    await this.exec("UPDATE saved_prompts SET uses = uses + 1 WHERE id = ?", [id]);
+  }
+
   async wipe() {
     await this.ready;
     await this.db.exec(
-      "DELETE FROM client_feedback; DELETE FROM client_shares; DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
+      "DELETE FROM creative_briefs; DELETE FROM client_feedback; DELETE FROM client_shares; DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
     );
   }
 }

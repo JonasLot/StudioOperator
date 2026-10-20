@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { initials, parseMockSetting, resolveMockForced, resolveMockMode, validateProfile } from "./rules";
+import { initials, parseDraftModel, parseMockSetting, resolveMockForced, resolveMockMode, validateDraftModel, validateProfile } from "./rules";
 
 test("mock mode: an explicit choice wins, otherwise the environment decides", () => {
   assert.equal(resolveMockMode("mock", "false"), true);
@@ -36,4 +36,19 @@ test("initials", () => {
   assert.equal(initials("Ada Lovelace"), "AL");
   assert.equal(initials("operator"), "O");
   assert.equal(initials("  "), "?");
+});
+
+test("draft model: needs an http(s) address and a model name, and tidies the address", () => {
+  assert.deepEqual(validateDraftModel({ baseUrl: " http://localhost:11434/v1/ ", model: " llama3.2 " }), { ok: true, value: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" } });
+  const bad = validateDraftModel({ baseUrl: "localhost:11434", model: "" });
+  assert.equal(bad.ok, false);
+  if (!bad.ok) assert.deepEqual(Object.keys(bad.errors).sort(), ["baseUrl", "model"]);
+  assert.equal(validateDraftModel({ baseUrl: "https://user:pw@host/v1", model: "m" }).ok, false);
+  assert.equal(validateDraftModel({ baseUrl: "ftp://host/v1", model: "m" }).ok, false);
+});
+
+test("a stored draft model that no longer validates reads as unset", () => {
+  assert.equal(parseDraftModel(null), null);
+  assert.equal(parseDraftModel("not json"), null);
+  assert.deepEqual(parseDraftModel('{"baseUrl":"https://openrouter.ai/api/v1","model":"x/y"}'), { baseUrl: "https://openrouter.ai/api/v1", model: "x/y" });
 });
