@@ -51,9 +51,9 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
   const unit = modelId === step.modelId ? step.unitCost : (model?.unitCostUsd ?? step.unitCost);
   const n = Math.max(0, Math.floor(Number(attempts) || 0));
 
-  function save(retry: boolean) {
+  function save(mode: "save" | "retry" | "rerun") {
     exec(
-      () => updateStepAction(jobId, step.id, { name, purpose, inputs: split(inputs), expectedOutputs: split(outputs), modelId, estimatedAttempts: n }, retry),
+      () => updateStepAction(jobId, step.id, { name, purpose, inputs: split(inputs), expectedOutputs: split(outputs), modelId, estimatedAttempts: n }, mode),
       () => setOpen(false),
     );
   }
@@ -71,7 +71,7 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
   if (!open) {
     return (
       <Button size="xs" variant="outline" onClick={() => setOpen(true)}>
-        <Pencil /> Edit
+        <Pencil /> {step.status === "done" ? "Edit & re-run" : "Edit"}
       </Button>
     );
   }
@@ -81,7 +81,7 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
       className="col-span-full mt-1 flex w-full flex-col gap-3 rounded-lg border bg-background p-3 text-left"
       onSubmit={(e) => {
         e.preventDefault();
-        save(false);
+        save(step.status === "done" ? "rerun" : "save");
       }}
     >
       <div className="grid gap-3 md:grid-cols-[1fr_16rem_6rem]">
@@ -120,6 +120,9 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
           <Textarea id={`${id}-outputs`} value={outputs} onChange={(e) => setOutputs(e.target.value)} />
         </div>
       </div>
+      {step.status === "done" ? (
+        <p className="text-[12px] text-muted-foreground">Re-running makes new takes for this step. Later steps go back to pending and run again afterwards; earlier takes are kept but lose their approval. This spends from the approved cap.</p>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="tnum text-[12.5px] text-muted-foreground">
           {n} × {usd(unit, { cents: true })} = <span className="font-medium text-foreground">{usd(unit * n, { cents: true })}</span>
@@ -130,10 +133,10 @@ export function StepEditor({ jobId, step, models, maxAttempts }: { jobId: string
             Cancel
           </Button>
           <Button type="submit" size="sm" variant={step.status === "failed" ? "outline" : "default"} disabled={pending}>
-            {pending ? "Saving…" : "Save step"}
+            {pending ? "Saving…" : step.status === "done" ? "Save & re-run" : "Save step"}
           </Button>
           {step.status === "failed" ? (
-            <Button type="button" size="sm" disabled={pending} onClick={() => save(true)}>
+            <Button type="button" size="sm" disabled={pending} onClick={() => save("retry")}>
               Save &amp; retry
             </Button>
           ) : null}

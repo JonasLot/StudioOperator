@@ -684,7 +684,10 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * plan. Before approval the cap is re-proposed; after approval the new total must still fit under the approved
  * cap, otherwise the change is refused (raise the cap through a budget approval first).
  */
-export async function updateStep(jobId: string, stepId: string, edit: StepEdit, retry = false) {
+export type StepSaveMode = "save" | "retry" | "rerun";
+
+export async function updateStep(jobId: string, stepId: string, edit: StepEdit, mode: StepSaveMode = "save") {
+  const retry = mode === "retry";
   const repo = getRepo();
   const job = await repo.getJob(jobId);
   const wf = await repo.getCurrentWorkflow(jobId);
@@ -694,8 +697,11 @@ export async function updateStep(jobId: string, stepId: string, edit: StepEdit, 
   }
   const step = wf.steps.find((x) => x.id === stepId);
   if (!step) throw new GuardrailError("Step not found.");
-  if (!["pending", "failed", "blocked"].includes(step.status)) throw new GuardrailError("Only steps that have not started, or that failed or are paused, can be edited.");
+  if (!(mode === "rerun" ? ["done"] : ["pending", "failed", "blocked"]).includes(step.status)) {
+    throw new GuardrailError(mode === "rerun" ? "Only a finished step can be re-run." : "Only steps that have not started, or that failed or are paused, can be edited.");
+  }
   if (retry && step.status !== "failed") throw new GuardrailError("Only a failed step can be retried after editing.");
+  if (mode === "rerun" && !["approved", "generating", "qa"].includes(job.status)) throw new GuardrailError("Production has not started.");
 
   const name = edit.name.trim();
   const purpose = edit.purpose.trim();
@@ -735,6 +741,51 @@ export async function updateStep(jobId: string, stepId: string, edit: StepEdit, 
   });
   await log(jobId, "operator", `Edited step ${step.order} “${name}”${model.id !== step.modelId ? ` (model → ${model.label})` : ""}.`);
   if (retry) await retryStep(jobId, stepId);
+  if (mode === "rerun") await restartFrom(jobId, stepId);
+}
+
+/**
+ * Re-run a finished step: it and every later step go back to pending, their earlier takes stay as history
+ * but lose their approval, and the next tick runs the step again. Refused while a later step is in flight
+ * or when the re-run does not fit under the approved cap.
+ */
+async function restartFrom(jobId: string, stepId: string) {
+  const repo = getRepo();
+  const job = (await repo.getJob(jobId))!;
+  const wf = (await repo.getCurrentWorkflow(jobId))!;
+  const step = wf.steps.find((s) => s.id === stepId)!;
+  if (wf.approvalStatus !== "approved" || !["generating", "qa"].includes(job.status)) throw new GuardrailError("Production is not running, so there is nothing to re-run.");
+  const later = wf.steps.filter((s) => s.order >= step.order);
+  if (later.some((s) => s.status === "running")) throw new GuardrailError("Wait for the running step to finish before re-running an earlier one.");
+  const gens = await repo.listGenerations(jobId);
+  const needed = step.unitCost * step.estimatedAttempts;
+  if (!fitsBudget(wf, gens, needed)) {
+    throw new GuardrailError(`Re-running needs about $${needed.toFixed(2)} more; committed spend is $${committedSpend(gens).toFixed(2)} of the $${wf.maxBudget} cap. Raise the cap first.`);
+  }
+  await repo.transaction(async () => {
+    const ids = new Set(later.map((s) => s.id));
+    for (const s of later) await repo.updateStep(s.id, { status: "pending" });
+    for (const g of gens.filter((x) => ids.has(x.stepId) && !x.revisionId && (x.selected || x.reviewStatus !== "pending"))) {
+      await repo.updateGeneration(g.id, { selected: false, reviewStatus: "pending", reviewNote: null });
+    }
+    for (const a of (await repo.listApprovals(jobId)).filter((x) => x.status === "pending" && x.kind === "final_delivery")) {
+      await repo.updateApproval(a.id, { status: "rejected", decidedBy: "system", decidedAt: now(), reason: a.reason + " (superseded by a re-run)" });
+    }
+    await repo.updateJob(jobId, { status: "generating" });
+  });
+  await log(jobId, "operator", `Re-running from step ${step.order} “${step.name}”${later.length > 1 ? `; ${later.length - 1} later step${later.length === 2 ? "" : "s"} reset` : ""}.`);
+  await audit({ jobId, kind: "decision", actor: "operator", summary: `Re-ran from “${step.name}” (step ${step.order}); later steps reset to pending.` });
+  await tick(jobId);
+}
+
+/** Whether a finished step needs the operator's approval before the next step starts. */
+export async function setStepReview(jobId: string, stepId: string, requiresReview: boolean) {
+  const { repo, wf } = await editablePlan(jobId);
+  const step = wf.steps.find((s) => s.id === stepId);
+  if (!step) throw new GuardrailError("Step not found.");
+  await repo.updateStep(stepId, { requiresReview });
+  await log(jobId, "operator", `${requiresReview ? "Now requiring" : "No longer requiring"} approval of “${step.name}” before the next step.`);
+  if (!requiresReview) await tick(jobId);
 }
 
 export async function retryStep(jobId: string, stepId: string) {
@@ -1026,6 +1077,7 @@ export async function addStep(jobId: string, input: NewStep) {
       unitCost: model.unitCostUsd,
       estimatedTotalCost: stepCost,
       status: "pending",
+      requiresReview: true,
     });
     await applyTotal(job, wf, total);
     await audit({ jobId, kind: "cost_change", actor: "operator", summary: `Added step “${name}” on ${model.label}; plan estimate now $${total.toFixed(2)}.`, costDeltaUsd: stepCost });

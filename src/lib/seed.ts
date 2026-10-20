@@ -83,6 +83,15 @@ async function fastForward(jobId: string, until: (status: string) => boolean, ma
     for (const gen of (await repo.listGenerations(jobId)).filter((x) => x.status === "queued" || x.status === "in_progress")) {
       await repo.updateGeneration(gen.id, { startedAt: new Date(Date.now() - 10_000).toISOString() });
     }
+    // The demo operator approves each finished step's picked take so the next step may start.
+    const wf = await repo.getCurrentWorkflow(jobId);
+    const gens = await repo.listGenerations(jobId);
+    for (const st of wf?.steps.filter((x) => x.status === "done") ?? []) {
+      const takes = gens.filter((g) => g.stepId === st.id && !g.revisionId && g.status === "completed");
+      if (takes.length && !takes.some((g) => g.reviewStatus === "approved")) {
+        await repo.updateGeneration((takes.find((g) => g.selected) ?? takes[0]).id, { reviewStatus: "approved", selected: true });
+      }
+    }
     await tick(jobId);
   }
 }

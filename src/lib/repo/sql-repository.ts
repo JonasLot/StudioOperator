@@ -71,7 +71,7 @@ const SPEC = {
   job: { json: ["referenceAssets"], bool: ["rightsCleared"] },
   intake: { json: ["original", "edited", "decisionReasons"] },
   workflow: {},
-  step: { json: ["inputs", "expectedOutputs", "deliverableIds"] },
+  step: { json: ["inputs", "expectedOutputs", "deliverableIds"], bool: ["requiresReview"] },
   generation: { bool: ["selected"] },
   revision: { bool: ["materialChange", "requiresApproval"] },
   approval: {},
@@ -92,6 +92,7 @@ export const MIGRATIONS = [
   "ALTER TABLE jobs ADD COLUMN template_id TEXT",
   "ALTER TABLE generations ADD COLUMN review_status TEXT NOT NULL DEFAULT 'pending'",
   "ALTER TABLE generations ADD COLUMN review_note TEXT",
+  "ALTER TABLE workflow_steps ADD COLUMN requires_review INTEGER NOT NULL DEFAULT 1",
 ];
 
 // ---------- repository ----------

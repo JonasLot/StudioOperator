@@ -9,6 +9,7 @@ import { MODEL_CATALOG, getModel } from "@/lib/higgsfield/catalog";
 import { dateTime, usd } from "@/lib/utils";
 import { ApproveStepOutputButton, RemoveStepButton, RetryStepButton, StartProductionButton } from "./job-actions";
 import { AddStep } from "./step-add";
+import { ReviewToggle, StepTakes } from "./step-takes";
 import { stepAwaitingReview } from "@/lib/services/review-gate";
 import { StepEditor } from "./step-editor";
 
@@ -38,7 +39,8 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
           const m = getModel(s.modelId);
           const sg = generations.filter((g) => g.stepId === s.id && !g.revisionId);
           const done = sg.filter((g) => g.status === "completed").length;
-          const canEdit = editable && ["pending", "failed", "blocked"].includes(s.status);
+          const canEdit = editable && (["pending", "failed", "blocked"].includes(s.status) || (s.status === "done" && workflow.approvalStatus === "approved" && ["generating", "qa"].includes(job.status) && !workflow.steps.some((x) => x.order >= s.order && x.status === "running")));
+          const isLast = s.order === workflow.steps.length;
           const nextStep = workflow.steps.find((x) => x.order > s.order && x.status === "pending");
           const awaiting = job.status === "generating" && nextStep && stepAwaitingReview(workflow, generations, nextStep)?.id === s.id;
           const prev = workflow.steps.find((x) => x.order === s.order - 1);
@@ -54,6 +56,11 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                     {sg.length ? <span className="tnum text-[11px] text-muted-foreground">{done}/{sg.length} usable</span> : null}
                   </div>
                   <p className="mt-0.5 text-[13px] text-muted-foreground">{s.purpose}</p>
+                  <StepTakes
+                    jobId={job.id}
+                    canReview={job.status === "generating" || job.status === "qa"}
+                    takes={sg.map((g) => ({ id: g.id, attempt: g.attempt, status: g.status, outputUrl: g.outputUrl, outputType: g.outputType, reviewStatus: g.reviewStatus, selected: g.selected, error: g.error, prompt: g.prompt, createdAt: g.createdAt }))}
+                  />
                   <div className="mt-2 grid gap-2 text-[12.5px] md:grid-cols-[1fr_auto_1fr]">
                     <div>
                       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Inputs</div>
@@ -79,6 +86,11 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                   {s.status === "failed" ? <span className="mt-1 self-end"><RetryStepButton jobId={job.id} stepId={s.id} /></span> : null}
                 </div>
               </div>
+              {editable && !isLast && s.status !== "skipped" ? (
+                <div className="border-t px-4 py-2">
+                  <ReviewToggle jobId={job.id} stepId={s.id} checked={s.requiresReview} />
+                </div>
+              ) : null}
               {awaiting ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/40 px-4 py-2 text-[12.5px]">
                   <span>
