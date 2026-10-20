@@ -81,6 +81,14 @@ export const config = {
     wireEnabled: process.env.HIGGSFIELD_WIRE_ENABLED === "true",
   },
 
+  // Absolute origin the provider can reach, used to turn stored outputs (/api/asset/…) into reference-image URLs
+  // for the next step. APP_URL wins; Vercel's production/deployment host is the fallback.
+  publicBaseUrl: (() => {
+    const raw = cleanEnv(process.env.APP_URL) || cleanEnv(process.env.VERCEL_PROJECT_PRODUCTION_URL) || cleanEnv(process.env.VERCEL_URL);
+    if (!raw) return "";
+    return (/^https?:\/\//.test(raw) ? raw : `https://${raw}`).replace(/\/$/, "");
+  })(),
+
   // Production polling. The app-level timeout is tracked separately from the
   // provider's own status and is never reported as a provider status.
   generation: {

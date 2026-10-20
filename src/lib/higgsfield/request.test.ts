@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildRequestBody, normalizeAspectRatio, type RequestSpec } from "./request";
+import { acceptsImageUrls, buildRequestBody, normalizeAspectRatio, type RequestSpec } from "./request";
 
 const SPEC: RequestSpec = { duration: 5, resolution: "720p", aspectRatios: ["16:9", "9:16", "1:1"] };
 
@@ -41,4 +41,9 @@ test("normalizeAspectRatio accepts common spellings", () => {
   assert.equal(normalizeAspectRatio("4/5"), "4:5");
   assert.equal(normalizeAspectRatio("wide"), null);
   assert.equal(normalizeAspectRatio(null), null);
+});
+
+test("only models without a body spec take reference images", () => {
+  assert.equal(acceptsImageUrls(undefined), true);
+  assert.equal(acceptsImageUrls({ duration: 5 }), false);
 });

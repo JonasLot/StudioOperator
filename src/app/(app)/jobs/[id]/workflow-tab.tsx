@@ -3,12 +3,15 @@ import { ApprovalBadge, StepStatusBadge } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
 import type { Generation, Job, Workflow } from "@/lib/domain/types";
 import { CATEGORY_LABEL } from "@/lib/domain/types";
-import { getModel } from "@/lib/higgsfield/catalog";
+import { config } from "@/lib/config";
+import { MODEL_CATALOG, getModel } from "@/lib/higgsfield/catalog";
 import { dateTime, usd } from "@/lib/utils";
 import { RetryStepButton, StartProductionButton } from "./job-actions";
+import { StepEditor } from "./step-editor";
 
 export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow: Workflow | null; generations: Generation[] }) {
   if (!workflow) return <p className="rounded-xl border border-dashed bg-card px-4 py-6 text-[13px] text-muted-foreground">No production plan yet. Analyse the brief first.</p>;
+  const editable = !["superseded", "rejected"].includes(workflow.approvalStatus) && !["rejected", "delivered"].includes(job.status);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)] px-4 py-3">
@@ -31,6 +34,8 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
           const m = getModel(s.modelId);
           const sg = generations.filter((g) => g.stepId === s.id && !g.revisionId);
           const done = sg.filter((g) => g.status === "completed").length;
+          const canEdit = editable && s.status === "pending";
+          const prev = workflow.steps.find((x) => x.order === s.order - 1);
           return (
             <li key={s.id} className="rounded-xl border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)]" data-step={s.order}>
               <div className="flex flex-wrap items-start gap-3 px-4 py-3">
@@ -47,6 +52,7 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                     <div>
                       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Inputs</div>
                       <ul className="mt-0.5">{s.inputs.map((x, i) => <li key={i} className="truncate" title={x}>{x}</li>)}</ul>
+                      {prev ? <p className="mt-1 text-[11.5px] text-muted-foreground">Also receives the picked output of step {prev.order} “{prev.name}” once it is done.</p> : null}
                     </div>
                     <ArrowRight className="mt-4 hidden size-3.5 text-muted-foreground md:block" />
                     <div>
@@ -67,6 +73,16 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                   {s.status === "failed" ? <span className="mt-1 self-end"><RetryStepButton jobId={job.id} stepId={s.id} /></span> : null}
                 </div>
               </div>
+              {canEdit ? (
+                <div className="flex flex-wrap border-t px-4 py-2">
+                  <StepEditor
+                    jobId={job.id}
+                    step={{ id: s.id, name: s.name, category: s.category, purpose: s.purpose, inputs: s.inputs, expectedOutputs: s.expectedOutputs, modelId: s.modelId, unitCost: s.unitCost, estimatedAttempts: s.estimatedAttempts }}
+                    models={MODEL_CATALOG.filter((x) => x.category === s.category).map((x) => ({ id: x.id, label: x.label, unitCostUsd: x.unitCostUsd, unitLabel: x.unitLabel, verified: x.verified }))}
+                    maxAttempts={config.economics.maxAttemptsPerStep}
+                  />
+                </div>
+              ) : null}
             </li>
           );
         })}

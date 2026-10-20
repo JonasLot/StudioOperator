@@ -116,6 +116,9 @@ export async function approveBudgetIncreaseAction(jobId: string, approvalId: str
 export async function decideApprovalAction(jobId: string, approvalId: string, status: "approved" | "rejected") {
   return run(jobId, () => studio.decideGenericApproval(jobId, approvalId, status));
 }
+export async function updateStepAction(jobId: string, stepId: string, edit: studio.StepEdit) {
+  return run(jobId, () => studio.updateStep(jobId, stepId, edit), "Step updated.");
+}
 export async function retryStepAction(jobId: string, stepId: string) {
   return run(jobId, () => studio.retryStep(jobId, stepId), "Step retried.");
 }

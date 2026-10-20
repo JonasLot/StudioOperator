@@ -18,7 +18,8 @@ import type {
   Workflow,
   WorkflowStep,
 } from "@/lib/domain/types";
-import { getModel } from "@/lib/higgsfield/catalog";
+import { MODEL_CATALOG, getModel } from "@/lib/higgsfield/catalog";
+import { acceptsImageUrls } from "@/lib/higgsfield/request";
 import { getProvider } from "@/lib/higgsfield/provider";
 import { getRepo } from "@/lib/repo";
 import { describeKeyShape } from "@/lib/secrets/crypto";
@@ -360,6 +361,7 @@ export async function reopenJob(jobId: string) {
 function promptFor(step: WorkflowStep, analysis: BriefView | null, attempt: number, extra?: string) {
   const parts = [
     step.purpose,
+    step.inputs.length ? `Inputs: ${step.inputs.join("; ")}` : "",
     analysis ? `Brief: ${analysis.summary}` : "",
     analysis?.dimensions.length ? `Format: ${analysis.dimensions.join(", ")}` : "",
     analysis?.brandConstraints.length ? `Constraints: ${analysis.brandConstraints.slice(0, 3).join(" ")}` : "",
@@ -390,10 +392,39 @@ async function aspectRatioFor(jobId: string, step: WorkflowStep): Promise<string
   return served.find((d) => d.aspectRatio)?.aspectRatio ?? null;
 }
 
+/**
+ * What an earlier step handed on: the picked image takes of the nearest finished step before this one, as
+ * absolute URLs the provider can fetch. Steps are sequential, so this is how step N sees step N-1's work.
+ */
+function referencesFrom(wf: Workflow, gens: Generation[], step: WorkflowStep): { urls: string[]; from: WorkflowStep | null; note: string | null } {
+  for (const prev of wf.steps.filter((s) => s.order < step.order && s.status === "done").sort((a, b) => b.order - a.order)) {
+    const picks = gens.filter((g) => g.stepId === prev.id && !g.revisionId && g.status === "completed" && g.outputType === "image" && g.outputUrl);
+    const chosen = picks.some((g) => g.selected) ? picks.filter((g) => g.selected) : picks.slice(0, 1);
+    if (!chosen.length) continue;
+    const urls: string[] = [];
+    for (const g of chosen) {
+      const u = g.outputUrl!;
+      if (/^https?:\/\//.test(u)) urls.push(u);
+      else if (config.publicBaseUrl && u.startsWith("/api/asset/")) urls.push(`${config.publicBaseUrl}${u}`);
+    }
+    return { urls, from: prev, note: urls.length ? null : "no public app URL is configured (set APP_URL), so the output could not be handed on" };
+  }
+  return { urls: [], from: null, note: null };
+}
+
 async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, attempt: number, prompt: string, revisionId: string | null, estimate: number): Promise<"submitted" | "over_budget"> {
   const repo = getRepo();
   const gens = await repo.listGenerations(job.id);
   if (!fitsBudget(wf, gens, estimate)) return "over_budget";
+  const model0 = getModel(step.modelId);
+  const refs = referencesFrom(wf, gens, step);
+  const takesImages = acceptsImageUrls(model0.request);
+  const imageUrls = takesImages ? refs.urls : [];
+  if (refs.from && attempt === 1 && !revisionId) {
+    if (refs.note) await log(job.id, "system", `“${step.name}” could not use “${refs.from.name}”: ${refs.note}.`);
+    else if (!takesImages) await log(job.id, "system", `${model0.label} takes no reference images, so “${refs.from.name}” was not sent; “${step.name}” runs from its prompt only.`);
+    else await log(job.id, "agent", `“${step.name}” starts from ${imageUrls.length} output${imageUrls.length === 1 ? "" : "s"} of “${refs.from.name}”.`);
+  }
   const provider = getProvider();
   const model = getModel(step.modelId);
   const gen: Generation = {
@@ -435,7 +466,7 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
     }
   }
   try {
-    const r = await provider.submit({ generationId: gen.id, modelId: step.modelId, prompt, aspectRatio: await aspectRatioFor(job.id, step), costEstimate: estimate });
+    const r = await provider.submit({ generationId: gen.id, modelId: step.modelId, prompt, imageUrls, aspectRatio: await aspectRatioFor(job.id, step), costEstimate: estimate });
     await repo.updateGeneration(gen.id, { providerRequestId: r.providerRequestId, statusUrl: r.statusUrl, status: r.status });
     await log(job.id, "agent", `Submitted take ${attempt} of “${step.name}” on ${model.label} (${model.endpoint}); est. $${estimate.toFixed(2)}, request ${r.providerRequestId}.`);
     await audit({ jobId: job.id, kind: "generation", summary: `Submitted take ${attempt} of “${step.name}” on ${model.label}.`, costDeltaUsd: estimate });
@@ -617,6 +648,82 @@ export async function decideGenericApproval(jobId: string, approvalId: string, s
     if (rev) await repo.updateRevision(rev.id, { approvalStatus: status });
     await log(jobId, "operator", `${status === "approved" ? "Approved" : "Declined"}: ${ap.title}`);
   });
+}
+
+export interface StepEdit {
+  name: string;
+  purpose: string;
+  inputs: string[];
+  expectedOutputs: string[];
+  modelId: string;
+  estimatedAttempts: number;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The operator edits a step that has not started: its name, the prompt text (purpose), inputs, expected
+ * outputs, the model, and the number of attempts. Text edits are free; a model or attempts change reprices the
+ * plan. Before approval the cap is re-proposed; after approval the new total must still fit under the approved
+ * cap, otherwise the change is refused (raise the cap through a budget approval first).
+ */
+export async function updateStep(jobId: string, stepId: string, edit: StepEdit) {
+  const repo = getRepo();
+  const job = await repo.getJob(jobId);
+  const wf = await repo.getCurrentWorkflow(jobId);
+  if (!job || !wf) throw new GuardrailError("No production plan exists for this job.");
+  if (wf.approvalStatus === "superseded" || wf.approvalStatus === "rejected" || ["rejected", "delivered"].includes(job.status)) {
+    throw new GuardrailError("This plan can no longer be edited.");
+  }
+  const step = wf.steps.find((x) => x.id === stepId);
+  if (!step) throw new GuardrailError("Step not found.");
+  if (step.status !== "pending") throw new GuardrailError("Only steps that have not started can be edited.");
+
+  const name = edit.name.trim();
+  const purpose = edit.purpose.trim();
+  if (!name) throw new GuardrailError("Give the step a name.");
+  if (!purpose) throw new GuardrailError("The step needs a prompt / purpose — it is what the model is asked to make.");
+  const model = MODEL_CATALOG.find((m) => m.id === edit.modelId);
+  if (!model) throw new GuardrailError("Unknown model.");
+  if (model.category !== step.category) throw new GuardrailError(`This step is ${step.category}; pick a ${step.category} model.`);
+  const attempts = Math.floor(edit.estimatedAttempts);
+  if (!Number.isFinite(attempts) || attempts < 1 || attempts > config.economics.maxAttemptsPerStep) {
+    throw new GuardrailError(`Attempts must be between 1 and ${config.economics.maxAttemptsPerStep}.`);
+  }
+  const list = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean);
+
+  const unitCost = model.id === step.modelId ? step.unitCost : model.unitCostUsd;
+  const stepCost = round2(unitCost * attempts);
+  const total = round2(wf.steps.reduce((a, x) => a + (x.id === step.id ? stepCost : x.estimatedTotalCost), 0));
+  const repriced = stepCost !== step.estimatedTotalCost;
+  if (wf.approvalStatus === "approved" && total > wf.maxBudget) {
+    throw new GuardrailError(`The new estimate ($${total.toFixed(2)}) exceeds the approved cap ($${wf.maxBudget}). Raise the cap first, or choose a cheaper model or fewer attempts.`);
+  }
+
+  await repo.transaction(async () => {
+    await repo.updateStep(step.id, {
+      name,
+      purpose,
+      inputs: list(edit.inputs),
+      expectedOutputs: list(edit.expectedOutputs),
+      modelId: model.id,
+      unitCost,
+      estimatedAttempts: attempts,
+      estimatedTotalCost: stepCost,
+    });
+    if (!repriced) return;
+    if (wf.approvalStatus === "approved") {
+      await repo.updateWorkflow(wf.id, { estimatedTotalCost: total });
+    } else {
+      const maxBudget = Math.ceil(total * (1 + job.contingencyPct));
+      await repo.updateWorkflow(wf.id, { estimatedTotalCost: total, maxBudget });
+      for (const a of (await repo.listApprovals(jobId)).filter((x) => x.status === "pending" && x.kind === "initial_workflow" && x.refId === wf.id)) {
+        await repo.updateApproval(a.id, { amount: maxBudget, reason: `Plan v${wf.version} with ${wf.steps.length} steps. Estimated spend $${total.toFixed(2)}.` });
+      }
+    }
+    await audit({ jobId, kind: "cost_change", actor: "operator", summary: `Edited “${name}”: ${model.label}, ${attempts} attempt${attempts === 1 ? "" : "s"}; plan estimate now $${total.toFixed(2)}.`, costDeltaUsd: round2(total - wf.estimatedTotalCost) });
+  });
+  await log(jobId, "operator", `Edited step ${step.order} “${name}”${model.id !== step.modelId ? ` (model → ${model.label})` : ""}.`);
 }
 
 export async function retryStep(jobId: string, stepId: string) {
