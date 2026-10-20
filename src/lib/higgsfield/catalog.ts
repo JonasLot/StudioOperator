@@ -30,8 +30,9 @@ export const MODEL_CATALOG: CatalogModel[] = [
     id: "soul-image",
     label: "Soul (image)",
     category: "image",
+    // Path from the Higgsfield image guide's quick start (higgsfield-ai/soul/standard).
     endpoint: "/higgsfield-ai/soul/standard",
-    verified: false,
+    verified: true,
     unitCostUsd: 0.06,
     unitLabel: "per image",
     output: "image",
@@ -87,6 +88,21 @@ export const MODEL_CATALOG: CatalogModel[] = [
     unitLabel: "per 5s clip",
     output: "video",
     strengths: "Animates approved keyframes with controlled camera moves",
+  },
+  {
+    // Path from the Kling 3.0 Standard image-to-video reference. Animates one approved keyframe. The image field name
+    // (image_url) and the planning price are assumptions: a first live run may answer 422 naming a field, and a
+    // rejected submit is never charged.
+    id: "kling-3-0-std-i2v",
+    label: "Kling 3.0 Standard · image to video",
+    category: "video",
+    endpoint: "/kling-video/v3.0/std/image-to-video",
+    verified: true,
+    unitCostUsd: 0.9,
+    unitLabel: "per 5s clip",
+    output: "video",
+    strengths: "Animates an approved keyframe into a clip at a lower price than Pro",
+    request: { duration: 5, imageField: "image_url" },
   },
   {
     id: "cinema-studio",

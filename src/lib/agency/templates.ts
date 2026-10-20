@@ -63,7 +63,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
     acceptedFileTypes: [...new Set([...IMG, "svg", ...DOC, ...VID])],
     modelRecipe: [
       { category: "image", modelId: "soul-image", label: "Concept & approved keyframes", attempts: 8 },
-      { category: "video", modelId: "cinema-studio", label: "Hero motion from keyframes", attempts: 6 },
+      { category: "video", modelId: "kling-o3-image-ref", label: "Hero motion from keyframes", attempts: 6 },
       { category: "editing", modelId: "edit-assemble", label: "Edit, titles, two aspect ratios", attempts: 2 },
       { category: "finishing", modelId: "upscale-4k", label: "Grade & masters", attempts: 2 },
     ],
