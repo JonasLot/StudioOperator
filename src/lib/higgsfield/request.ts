@@ -19,6 +19,11 @@ export interface RequestInput {
   aspectRatio?: string | null; // the deliverable's ratio, e.g. "9:16"; used when the model allows it
 }
 
+/** Whether the model takes reference images: models without a spec send { prompt, image_urls? }, models with one send only their documented fields. */
+export function acceptsImageUrls(spec: RequestSpec | undefined): boolean {
+  return !spec;
+}
+
 /** "16x9", "16/9" and "16×9" all mean "16:9". */
 export function normalizeAspectRatio(raw: string | null | undefined): string | null {
   if (!raw) return null;

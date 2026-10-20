@@ -116,6 +116,18 @@ export async function approveBudgetIncreaseAction(jobId: string, approvalId: str
 export async function decideApprovalAction(jobId: string, approvalId: string, status: "approved" | "rejected") {
   return run(jobId, () => studio.decideGenericApproval(jobId, approvalId, status));
 }
+export async function updateStepAction(jobId: string, stepId: string, edit: studio.StepEdit, retry = false) {
+  return run(jobId, () => studio.updateStep(jobId, stepId, edit, retry), retry ? "Step updated and retried." : "Step updated.");
+}
+export async function addStepAction(jobId: string, input: studio.NewStep) {
+  return run(jobId, () => studio.addStep(jobId, input), "Step added.");
+}
+export async function removeStepAction(jobId: string, stepId: string) {
+  return run(jobId, () => studio.removeStep(jobId, stepId), "Step removed.");
+}
+export async function approveStepOutputAction(jobId: string, stepId: string) {
+  return run(jobId, () => studio.approveStepOutput(jobId, stepId), "Output approved.");
+}
 export async function retryStepAction(jobId: string, stepId: string) {
   return run(jobId, () => studio.retryStep(jobId, stepId), "Step retried.");
 }

@@ -233,6 +233,12 @@ export class SqlStudioRepository implements StudioRepository {
   async updateWorkflow(id: string, patch: Partial<Workflow>) {
     await this.patch("workflows", id, patch, SPEC.workflow);
   }
+  async insertStep(step: WorkflowStep) {
+    await this.insert("workflow_steps", step, SPEC.step);
+  }
+  async deleteStep(id: string) {
+    await this.exec("DELETE FROM workflow_steps WHERE id = ?", [id]);
+  }
   async updateStep(id: string, patch: Partial<WorkflowStep>) {
     await this.patch("workflow_steps", id, patch, SPEC.step);
   }

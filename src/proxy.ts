@@ -12,6 +12,9 @@ export function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   // The client portal is reached by clients through an unguessable per-job token, not the operator's session.
   if (pathname.startsWith("/c/")) return NextResponse.next();
+  // Stored outputs are fetched by the generation provider as reference images for the next step. The id is a
+  // random per-asset token, and the route serves bytes only.
+  if (pathname.startsWith("/api/asset/")) return NextResponse.next();
   const signedIn = verifySession(req.cookies.get(SESSION_COOKIE)?.value, passcode) !== null;
 
   if (pathname === "/login") {
