@@ -59,7 +59,7 @@ export function WorkflowTab({ job, workflow, generations }: { job: Job; workflow
                   <StepTakes
                     jobId={job.id}
                     canReview={job.status === "generating" || job.status === "qa"}
-                    takes={sg.map((g) => ({ id: g.id, attempt: g.attempt, status: g.status, outputUrl: g.outputUrl, outputType: g.outputType, reviewStatus: g.reviewStatus, selected: g.selected, error: g.error }))}
+                    takes={sg.map((g) => ({ id: g.id, attempt: g.attempt, status: g.status, outputUrl: g.outputUrl, outputType: g.outputType, reviewStatus: g.reviewStatus, selected: g.selected, error: g.error, prompt: g.prompt, createdAt: g.createdAt }))}
                   />
                   <div className="mt-2 grid gap-2 text-[12.5px] md:grid-cols-[1fr_auto_1fr]">
                     <div>
