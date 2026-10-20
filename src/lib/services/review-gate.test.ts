@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Generation, Workflow, WorkflowStep } from "@/lib/domain/types";
 import { stepAwaitingReview } from "./review-gate";
 
-const step = (order: number, status: WorkflowStep["status"]) => ({ id: `s${order}`, order, status }) as WorkflowStep;
+const step = (order: number, status: WorkflowStep["status"]) => ({ id: `s${order}`, order, status, requiresReview: true }) as WorkflowStep;
 const take = (stepId: string, reviewStatus: Generation["reviewStatus"], status: Generation["status"] = "completed") =>
   ({ stepId, reviewStatus, status, revisionId: null }) as Generation;
 const wf = { steps: [step(1, "done"), step(2, "pending")] } as Workflow;

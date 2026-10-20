@@ -86,6 +86,7 @@ export interface WorkflowStep {
   unitCost: number;
   estimatedTotalCost: number;
   status: StepStatus;
+  requiresReview: boolean; // the operator must approve a take of this step before the next one starts
 }
 
 export interface Workflow {

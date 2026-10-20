@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS workflow_steps (
   estimated_attempts INTEGER NOT NULL,
   unit_cost REAL NOT NULL,
   estimated_total_cost REAL NOT NULL,
-  status TEXT NOT NULL
+  status TEXT NOT NULL,
+  requires_review INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_steps_workflow ON workflow_steps(workflow_id, "order");
 

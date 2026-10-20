@@ -125,6 +125,7 @@ export function buildWorkflow(
       unitCost: s.unitCostUsd,
       estimatedTotalCost: s.stepCost,
       status: "pending",
+      requiresReview: true,
     };
   });
   const total = Math.round(steps.reduce((a, s) => a + s.estimatedTotalCost, 0) * 100) / 100;
