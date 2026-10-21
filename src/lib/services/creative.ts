@@ -1,5 +1,6 @@
 import "server-only";
 import { coerceBrief, changedFields, creativeDirectionText, FIELD_LABEL, type BriefMessage, type CreativeBrief } from "@/lib/creative/brief";
+import { mockDraft } from "@/lib/creative/mock";
 import { draftCreativeBrief } from "@/lib/creative/draft";
 import { sparOnBrief } from "@/lib/creative/spar";
 import { suggestStepPrompt, type StepPromptResult } from "@/lib/creative/step-prompt";
@@ -33,12 +34,18 @@ async function editable(jobId: string): Promise<{ job: Job; rec: CreativeBriefRe
 export const getCreativeBrief = (jobId: string) => getRepo().getCreativeBrief(jobId);
 
 /**
- * The creative direction to append to step prompts: only a locked brief counts, so a half-finished draft
- * never leaks into paid generations.
+ * The creative direction to append to step prompts: prefers a locked brief, falls back to a draft brief,
+ * or drafts one deterministically from the job's brief so generation prompts always have concrete direction.
  */
 export async function creativeDirectionFor(jobId: string): Promise<string> {
   const rec = await getCreativeBrief(jobId);
-  return rec?.status === "locked" ? creativeDirectionText(rec.brief) : "";
+  if (rec?.brief) return creativeDirectionText(rec.brief);
+  const job = await getRepo().getJob(jobId);
+  if (job) {
+    const brief = mockDraft({ title: job.title, rawBrief: job.rawBrief, clientNotes: job.clientNotes });
+    return creativeDirectionText(brief);
+  }
+  return "";
 }
 
 /** First phase: the cheap / local model writes the draft. Replaces an existing unlocked draft. */
@@ -104,16 +111,34 @@ export async function unlockBrief(jobId: string) {
   await log(jobId, "operator", "Unlocked the creative brief for changes.");
 }
 
-/** The first-phase model proposes a prompt for one step from the locked brief. Nothing is saved. */
+/** The first-phase model proposes a prompt for one step from the brief and preceding steps. Nothing is saved. */
 export async function suggestPromptForStep(jobId: string, stepId: string): Promise<StepPromptResult> {
-  await openJob(jobId);
-  const rec = await getCreativeBrief(jobId);
-  if (rec?.status !== "locked") throw new GuardrailError("Lock the creative brief first; prompts are suggested from it.");
-  const step = (await getRepo().getCurrentWorkflow(jobId))?.steps.find((s) => s.id === stepId);
+  const job = await openJob(jobId);
+  let rec = await getCreativeBrief(jobId);
+  if (!rec) {
+    try {
+      await draftBrief(jobId);
+      rec = await getCreativeBrief(jobId);
+    } catch {
+      // non-fatal fallback
+    }
+  }
+  const brief = rec?.brief ?? mockDraft({ title: job.title, rawBrief: job.rawBrief, clientNotes: job.clientNotes });
+  const wf = await getRepo().getCurrentWorkflow(jobId);
+  const step = wf?.steps.find((s) => s.id === stepId);
   if (!step) throw new GuardrailError("Step not found.");
+  const prevStep = wf?.steps.filter((s) => s.order < step.order).sort((a, b) => b.order - a.order)[0] ?? null;
   return suggestStepPrompt(
-    { stepName: step.name, category: step.category, modelLabel: getModel(step.modelId).label, purpose: step.purpose, inputs: step.inputs, expectedOutputs: step.expectedOutputs },
-    rec.brief,
+    {
+      stepName: step.name,
+      category: step.category,
+      modelLabel: getModel(step.modelId).label,
+      purpose: step.purpose,
+      inputs: step.inputs,
+      expectedOutputs: step.expectedOutputs,
+      prevStep: prevStep ? { name: prevStep.name, purpose: prevStep.purpose } : null,
+    },
+    brief,
   );
 }
 

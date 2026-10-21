@@ -153,7 +153,7 @@ export function StepEditor({ jobId, step, models, maxAttempts, prompts, promptCo
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor={`${id}-purpose`}>Prompt / purpose</Label>
-          <Button type="button" size="xs" variant="outline" disabled={suggesting || !briefLocked} title={briefLocked ? "Let the first-phase model write this prompt from the locked creative brief" : "Lock the creative brief first"} onClick={suggest}>
+          <Button type="button" size="xs" variant="outline" disabled={suggesting} title={briefLocked ? "Let the model write this prompt from the locked creative brief" : "Let the model write this prompt based on the creative brief"} onClick={suggest}>
             <Wand2 /> {suggesting ? "Suggesting…" : "Suggest from brief"}
           </Button>
           {prompts.length ? (

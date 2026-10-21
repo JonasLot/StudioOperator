@@ -14,12 +14,13 @@ import { ReviewToggle, StepTakes } from "./step-takes";
 import { stepAwaitingReview } from "@/lib/services/review-gate";
 import { StepEditor } from "./step-editor";
 import { CreativeBriefCard } from "./creative-brief";
+import { resolveStepHandoff } from "@/lib/services/handoff";
 
 /** What {{variables}} in a saved prompt are filled from: the creative brief and the analysed brief. */
-function promptContextFor(creative: CreativeBriefRecord | null, analysis: BriefView | null): PromptContext {
+function promptContextFor(creative: CreativeBriefRecord | null, analysis: BriefView | null, job?: Job): PromptContext {
   const b = creative?.brief;
   return {
-    brief: analysis?.summary,
+    brief: analysis?.summary || job?.rawBrief || "",
     logline: b?.logline,
     audience: b?.audience,
     tone: b?.tone,
@@ -33,7 +34,7 @@ function promptContextFor(creative: CreativeBriefRecord | null, analysis: BriefV
 
 export function WorkflowTab({ job, workflow, generations, creative, analysis, prompts }: { job: Job; workflow: Workflow | null; generations: Generation[]; creative: CreativeBriefRecord | null; analysis: BriefView | null; prompts: SavedPrompt[] }) {
   const closed = ["rejected", "delivered"].includes(job.status);
-  const promptContext = promptContextFor(creative, analysis);
+  const promptContext = promptContextFor(creative, analysis, job);
   const briefCard = (
     <CreativeBriefCard
       jobId={job.id}
@@ -81,6 +82,10 @@ export function WorkflowTab({ job, workflow, generations, creative, analysis, pr
           const nextStep = workflow.steps.find((x) => x.order > s.order && x.status === "pending");
           const awaiting = job.status === "generating" && nextStep && stepAwaitingReview(workflow, generations, nextStep)?.id === s.id;
           const prev = workflow.steps.find((x) => x.order === s.order - 1);
+          const handoff = resolveStepHandoff(workflow, generations, s, {
+            publicBaseUrl: config.publicBaseUrl,
+            mockMode: config.mockMode,
+          });
           return (
             <li key={s.id} className="rounded-xl border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)]" data-step={s.order}>
               <div className="flex flex-wrap items-start gap-3 px-4 py-3">
@@ -103,7 +108,23 @@ export function WorkflowTab({ job, workflow, generations, creative, analysis, pr
                     <div>
                       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Inputs</div>
                       <ul className="mt-0.5">{s.inputs.map((x, i) => <li key={i} className="truncate" title={x}>{x}</li>)}</ul>
-                      {prev ? <p className="mt-1 text-[11.5px] text-muted-foreground">Also receives the picked output of step {prev.order} “{prev.name}” once it is done.</p> : null}
+                      {handoff.from ? (
+                        <div className="mt-1.5 flex flex-col gap-0.5 rounded-md bg-muted/40 px-2 py-1 text-[11.5px]">
+                          <div className="flex items-center gap-1.5">
+                            <BadgeCheck className="size-3.5 text-ok shrink-0" />
+                            <span>
+                              Forwarded from Step {handoff.from.order} “{handoff.from.name}”:{" "}
+                              <span className="font-medium">
+                                {handoff.reviewStatus === "approved" ? `Approved Take ${handoff.takeAttempt}` : `Take ${handoff.takeAttempt ?? 1}`}
+                              </span>
+                              {handoff.urls.length ? " · media attached" : ""}
+                            </span>
+                          </div>
+                          {handoff.note ? <span className="text-[11px] text-warn">{handoff.note}</span> : null}
+                        </div>
+                      ) : prev ? (
+                        <p className="mt-1 text-[11.5px] text-muted-foreground">Will receive the approved output of step {prev.order} “{prev.name}” once finished.</p>
+                      ) : null}
                     </div>
                     <ArrowRight className="mt-4 hidden size-3.5 text-muted-foreground md:block" />
                     <div>

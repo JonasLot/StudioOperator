@@ -25,7 +25,8 @@ import { getRepo } from "@/lib/repo";
 import { describeKeyShape } from "@/lib/secrets/crypto";
 import { secretStatus } from "@/lib/secrets";
 import { audit } from "./audit";
-import { creativeDirectionFor } from "./creative";
+import { creativeDirectionFor, draftBrief } from "./creative";
+import { buildStepPrompt, resolveStepHandoff, type StepHandoff } from "./handoff";
 import { computeProfitability } from "./economics";
 import {
   GuardrailError,
@@ -182,6 +183,11 @@ export async function createJob(input: NewJobInput) {
     return job.id;
   }
   await replanFromIntake(job.id);
+  try {
+    await draftBrief(job.id);
+  } catch {
+    // Non-fatal if offline/mock drafter cannot run yet
+  }
   return job.id;
 }
 
@@ -361,19 +367,35 @@ export async function reopenJob(jobId: string) {
 // ---------------------------------------------------------------------------
 
 /** `creative` is the locked creative brief as prompt text ("" when there is none; see creativeDirectionFor). */
-function promptFor(step: WorkflowStep, analysis: BriefView | null, attempt: number, creative: string, extra?: string) {
-  const parts = [
-    step.purpose,
-    step.inputs.length ? `Inputs: ${step.inputs.join("; ")}` : "",
+function promptFor(
+  step: WorkflowStep,
+  analysis: BriefView | null,
+  attempt: number,
+  creative: string,
+  extra?: string,
+  refInfo?: StepHandoff | null,
+  rawBrief?: string
+) {
+  return buildStepPrompt({
+    step,
+    analysis,
+    attempt,
     creative,
-    analysis ? `Brief: ${analysis.summary}` : "",
-    analysis?.dimensions.length ? `Format: ${analysis.dimensions.join(", ")}` : "",
-    analysis?.brandConstraints.length ? `Constraints: ${analysis.brandConstraints.slice(0, 3).join(" ")}` : "",
-    step.category === "image" && analysis?.exactText.length && step.modelId === "ideogram-4" ? `Render text exactly: ${analysis.exactText.map((t) => `"${t}"`).join(" / ")}` : "",
-    extra ?? "",
-    `Take ${attempt}.`,
-  ];
-  return parts.filter(Boolean).join("\n");
+    extra,
+    refInfo,
+    rawBrief,
+  });
+}
+
+/**
+ * What earlier steps handed on: prioritizes approved takes, handles image vs video capabilities,
+ * and resolves public/mock URLs so step N can see step N-1's work.
+ */
+export function referencesFrom(wf: Workflow, gens: Generation[], step: WorkflowStep): StepHandoff {
+  return resolveStepHandoff(wf, gens, step, {
+    publicBaseUrl: config.publicBaseUrl,
+    mockMode: config.mockMode,
+  });
 }
 
 export async function startProduction(jobId: string) {
@@ -396,38 +418,18 @@ async function aspectRatioFor(jobId: string, step: WorkflowStep): Promise<string
   return served.find((d) => d.aspectRatio)?.aspectRatio ?? null;
 }
 
-/**
- * What an earlier step handed on: the picked image takes of the nearest finished step before this one, as
- * absolute URLs the provider can fetch. Steps are sequential, so this is how step N sees step N-1's work.
- */
-function referencesFrom(wf: Workflow, gens: Generation[], step: WorkflowStep): { urls: string[]; from: WorkflowStep | null; note: string | null } {
-  for (const prev of wf.steps.filter((s) => s.order < step.order && s.status === "done").sort((a, b) => b.order - a.order)) {
-    const picks = gens.filter((g) => g.stepId === prev.id && !g.revisionId && g.status === "completed" && g.outputType === "image" && g.outputUrl);
-    const chosen = picks.some((g) => g.selected) ? picks.filter((g) => g.selected) : picks.slice(0, 1);
-    if (!chosen.length) continue;
-    const urls: string[] = [];
-    for (const g of chosen) {
-      const u = g.outputUrl!;
-      if (/^https?:\/\//.test(u)) urls.push(u);
-      else if (config.publicBaseUrl && u.startsWith("/api/asset/")) urls.push(`${config.publicBaseUrl}${u}`);
-    }
-    return { urls, from: prev, note: urls.length ? null : "no public app URL is configured (set APP_URL), so the output could not be handed on" };
-  }
-  return { urls: [], from: null, note: null };
-}
-
 async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, attempt: number, prompt: string, revisionId: string | null, estimate: number): Promise<"submitted" | "over_budget"> {
   const repo = getRepo();
   const gens = await repo.listGenerations(job.id);
   if (!fitsBudget(wf, gens, estimate)) return "over_budget";
   const model0 = getModel(step.modelId);
   const refs = referencesFrom(wf, gens, step);
-  const takesImages = acceptsImageUrls(model0.request);
-  const imageUrls = takesImages ? refs.urls : [];
+  const takesImages = acceptsImageUrls(model0.request) && model0.category !== "voice";
+  const imageUrls = takesImages && (refs.outputType === "image" || (config.mockMode && refs.urls.length > 0)) ? refs.urls : [];
   if (refs.from && attempt === 1 && !revisionId) {
     if (refs.note) await log(job.id, "system", `“${step.name}” could not use “${refs.from.name}”: ${refs.note}.`);
-    else if (!takesImages) await log(job.id, "system", `${model0.label} takes no reference images, so “${refs.from.name}” was not sent; “${step.name}” runs from its prompt only.`);
-    else await log(job.id, "agent", `“${step.name}” starts from ${imageUrls.length} output${imageUrls.length === 1 ? "" : "s"} of “${refs.from.name}”.`);
+    else if (imageUrls.length > 0) await log(job.id, "agent", `“${step.name}” starts from ${imageUrls.length} output${imageUrls.length === 1 ? "" : "s"} of “${refs.from.name}”.`);
+    else await log(job.id, "agent", `“${step.name}” continues from “${refs.from.name}” (take ${refs.takeAttempt ?? 1}).`);
   }
   const provider = getProvider();
   const model = getModel(step.modelId);
@@ -561,7 +563,8 @@ export async function tick(jobId: string) {
       if (!completed.some((g) => g.selected)) await repo.updateGeneration(completed[0].id, { selected: true });
       await log(jobId, "agent", `“${step.name}” finished: ${completed.length}/${sg.length} attempts usable.`);
     } else if (sg.length < step.estimatedAttempts + MAX_AUTO_RETRIES) {
-      const r = await submitGeneration(job, wf, step, sg.length + 1, promptFor(step, analysis, sg.length + 1, await creativeDirectionFor(jobId), "Retry after failure."), null, step.unitCost);
+      const refs = referencesFrom(wf, gens, step);
+      const r = await submitGeneration(job, wf, step, sg.length + 1, promptFor(step, analysis, sg.length + 1, await creativeDirectionFor(jobId), "Retry after failure.", refs, job.rawBrief), null, step.unitCost);
       if (r === "over_budget") await blockForBudget(job, wf, step, step.unitCost);
       else await log(jobId, "agent", `All attempts failed on “${step.name}”; retrying within budget.`);
     } else {
@@ -596,8 +599,9 @@ export async function tick(jobId: string) {
       } else {
         await repo.updateStep(next.id, { status: "running" });
         const creative = await creativeDirectionFor(jobId);
+        const refs = referencesFrom(fresh, gens, next);
         for (let i = 1; i <= next.estimatedAttempts; i++) {
-          await submitGeneration(job, fresh, next, i, promptFor(next, analysis, i, creative), null, next.unitCost);
+          await submitGeneration(job, fresh, next, i, promptFor(next, analysis, i, creative, undefined, refs, job.rawBrief), null, next.unitCost);
         }
         await log(jobId, "agent", `Submitted ${next.estimatedAttempts} attempts for “${next.name}” on ${getModel(next.modelId).label}.`);
       }
@@ -801,7 +805,9 @@ export async function retryStep(jobId: string, stepId: string) {
   const step = wf.steps.find((s) => s.id === stepId);
   if (!step || step.status !== "failed") throw new GuardrailError("Only failed steps can be retried.");
   await repo.updateStep(stepId, { status: "running" });
-  const r = await submitGeneration(job, wf, step, (await repo.listGenerations(jobId)).filter((g) => g.stepId === stepId).length + 1, promptFor(step, await getBrief(jobId), 99, await creativeDirectionFor(jobId), "Operator-requested retry."), null, step.unitCost);
+  const allGens = await repo.listGenerations(jobId);
+  const refs = referencesFrom(wf, allGens, step);
+  const r = await submitGeneration(job, wf, step, allGens.filter((g) => g.stepId === stepId).length + 1, promptFor(step, await getBrief(jobId), 99, await creativeDirectionFor(jobId), "Operator-requested retry.", refs, job.rawBrief), null, step.unitCost);
   if (r === "over_budget") await blockForBudget(job, wf, step, step.unitCost);
   if (job.status !== "generating") await repo.updateJob(jobId, { status: "generating" });
   await log(jobId, "operator", `Retried “${step.name}”.`);
@@ -871,7 +877,8 @@ export async function retryGeneration(jobId: string, generationId: string) {
   const attempt = (await repo.listGenerations(jobId)).filter((x) => x.stepId === step.id).length + 1;
   if (job.status !== "generating") await repo.updateJob(jobId, { status: "generating" });
   if (step.status === "failed" || step.status === "blocked") await repo.updateStep(step.id, { status: "running" });
-  const r = await submitGeneration(job, wf, step, attempt, promptFor(step, await getBrief(jobId), attempt, await creativeDirectionFor(jobId), "Operator-requested retry of a prior attempt."), g.revisionId, step.unitCost);
+  const refs = referencesFrom(wf, await repo.listGenerations(jobId), step);
+  const r = await submitGeneration(job, wf, step, attempt, promptFor(step, await getBrief(jobId), attempt, await creativeDirectionFor(jobId), "Operator-requested retry of a prior attempt.", refs, job.rawBrief), g.revisionId, step.unitCost);
   if (r === "over_budget") await blockForBudget(job, wf, step, step.unitCost);
   await log(jobId, "operator", `Retried take ${g.attempt} as a new attempt on “${step.name}”.`);
 }
@@ -957,8 +964,9 @@ export async function runRevision(jobId: string, revisionId: string) {
     await repo.updateApproval(a.id, { status: "rejected", decidedBy: "system", decidedAt: now(), reason: "Superseded — revision in progress." });
   }
   const pseudoStep: WorkflowStep = { ...step, modelId: rev.modelId, unitCost: unit, purpose: rev.actionSummary };
+  const refs = referencesFrom(wf, await repo.listGenerations(jobId), pseudoStep);
   for (let i = 1; i <= rev.attempts; i++) {
-    await submitGeneration(job, wf, pseudoStep, i, promptFor(pseudoStep, await getBrief(jobId), i, await creativeDirectionFor(jobId), `Client note: ${rev.clientNote}`), rev.id, unit);
+    await submitGeneration(job, wf, pseudoStep, i, promptFor(pseudoStep, await getBrief(jobId), i, await creativeDirectionFor(jobId), `Client note: ${rev.clientNote}`, refs, job.rawBrief), rev.id, unit);
   }
   await log(jobId, "agent", `Running revision: ${rev.actionSummary}`);
 }

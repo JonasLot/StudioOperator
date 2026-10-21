@@ -61,7 +61,7 @@ export const MODEL_CATALOG: CatalogModel[] = [
     unitLabel: "per 5s clip",
     output: "video",
     strengths: "Fast, consistent social and cutdown footage from a prompt",
-    request: { duration: 5, resolution: "720p", aspectRatios: ["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"] },
+    request: { duration: 5, resolution: "720p", aspectRatios: ["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"], imageField: "image_url" },
   },
   {
     // Path from the Kling 3.0 Pro text-to-video reference. Body fields follow the CLI's parameters for
@@ -76,7 +76,7 @@ export const MODEL_CATALOG: CatalogModel[] = [
     unitLabel: "per 5s clip",
     output: "video",
     strengths: "Cinematic camera and controlled motion for hero shots",
-    request: { duration: 5, aspectRatios: ["16:9", "9:16", "1:1"] },
+    request: { duration: 5, aspectRatios: ["16:9", "9:16", "1:1"], imageField: "image_url" },
   },
   {
     id: "kling-o3-image-ref",

@@ -84,8 +84,15 @@ export function mockSpar(current: CreativeBrief, message: string): SparResult {
   };
 }
 
-/** Offline step-prompt suggestion: the step's own prompt followed by the brief's look and exclusions. */
-export function mockStepPrompt(purpose: string, brief: CreativeBrief): string {
-  const extra = [brief.logline, brief.visualDirection && `Look: ${brief.visualDirection}`, brief.tone && `Tone: ${brief.tone}`, brief.avoid.length && `Avoid: ${brief.avoid.join(", ")}`].filter(Boolean);
+/** Offline step-prompt suggestion: the step's own prompt followed by the brief's look, exclusions, must-haves, and handoff from earlier steps. */
+export function mockStepPrompt(purpose: string, brief: CreativeBrief, prevStep?: { name: string; purpose: string } | null): string {
+  const extra = [
+    brief.logline,
+    brief.visualDirection && `Look: ${brief.visualDirection}`,
+    brief.tone && `Tone: ${brief.tone}`,
+    brief.mustHaves.length && `Include: ${brief.mustHaves.join(", ")}`,
+    brief.avoid.length && `Avoid: ${brief.avoid.join(", ")}`,
+    prevStep && `Builds on step “${prevStep.name}”: maintain visual continuity and approved selects.`,
+  ].filter(Boolean);
   return [purpose.trim(), ...extra].join("\n");
 }
