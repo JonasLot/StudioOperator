@@ -47,7 +47,7 @@ function fromRow<T>(row: Record<string, unknown> | undefined, spec: FieldSpec): 
   if (!row) return null;
   const obj: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) {
-    if (k === "_metadata" || k === "seq") continue; // driver bookkeeping, not a column of the record
+    if (k === "seq") continue; // not a column of the record
     const key = camel(k);
     if (spec.json?.includes(key)) obj[key] = v == null ? null : JSON.parse(String(v));
     else if (spec.bool?.includes(key)) obj[key] = v === 1;
@@ -103,16 +103,15 @@ export const MIGRATIONS = [
 
 /**
  * One repository for every database: the SQL is written once with `?` placeholders and runs on
- * SQLite, libSQL (Turso) or Postgres through a SqlDriver. The portable schema is applied once per
+ * SQLite through a SqlDriver. The portable schema is applied once per
  * schema version (see SqlDriver.applySchema) before the first statement runs.
  */
 export class SqlStudioRepository implements StudioRepository {
   private ready: Promise<void>;
-  // Insertion order for tables ordered "as written": SQLite has rowid, Postgres has the explicit seq column.
-  private readonly seq: string;
+  // Insertion order for tables ordered "as written".
+  private readonly seq = "rowid";
 
   constructor(private db: SqlDriver) {
-    this.seq = db.dialect === "postgres" ? "seq" : "rowid";
     const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/repo/schema.sql"), "utf8");
     this.ready = db.applySchema(schema, MIGRATIONS, schemaVersion(schema, MIGRATIONS));
     // A failed start must be retried on the next call rather than poisoning every later one.

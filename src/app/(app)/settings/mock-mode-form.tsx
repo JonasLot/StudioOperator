@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FlaskConical, Loader2, TriangleAlert, Zap } from "lucide-react";
+import { FlaskConical, Loader2, Zap } from "lucide-react";
 import { setMockModeAction, type MockModeState } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 
 type Choice = "mock" | "live" | "default";
 
-export function MockModeForm({ current, mockMode, passcodeConfigured, envLabel, durable, savedAt }: { current: "mock" | "live" | null; mockMode: boolean; passcodeConfigured: boolean; envLabel: string; durable: boolean; savedAt: string | null }) {
+export function MockModeForm({ current, mockMode, passcodeConfigured, envLabel, savedAt }: { current: "mock" | "live" | null; mockMode: boolean; passcodeConfigured: boolean; envLabel: string; savedAt: string | null }) {
   const [state, action, pending] = React.useActionState<MockModeState, FormData>(setMockModeAction, undefined);
   const [choice, setChoice] = React.useState<Choice>(current ?? "default");
   const needsPasscode = choice !== "mock";
@@ -25,15 +25,6 @@ export function MockModeForm({ current, mockMode, passcodeConfigured, envLabel, 
     // React resets a form after its action runs, which would put the radios back to their initial
     // values while `choice` still says otherwise. Remounting on every result keeps them in step.
     <form key={`${current ?? "default"}|${state?.error ?? state?.message ?? ""}`} action={action} className="flex flex-col gap-4">
-      {!durable ? (
-        <p className="flex items-start gap-2 rounded-lg border bg-warn-soft px-3 py-2 text-[12.5px]">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-          <span>
-            This choice is stored in the database, and no durable database is configured (set DATABASE_URL to a Postgres database). On Vercel that means temporary storage: the mode can fall back to the default after a cold start,
-            and different server instances can disagree. Connect a database to make it stick.
-          </span>
-        </p>
-      ) : null}
       <p className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-[13px]">
         {mockMode ? <FlaskConical className="size-4" /> : <Zap className="size-4 text-ok" />}
         {mockMode ? "Right now: mock mode — no external calls are made." : "Right now: live mode."}

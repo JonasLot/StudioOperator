@@ -4,7 +4,6 @@ import { logoutAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { authEnabled, currentSession } from "@/lib/auth";
-import { storageIsDurable } from "@/lib/secrets";
 import { getProfile } from "@/lib/settings";
 import { initials } from "@/lib/settings/rules";
 import { ProfileForm } from "./profile-form";
@@ -44,12 +43,6 @@ export default async function ProfilePage() {
               <p className="truncate text-[13px] text-muted-foreground">{profile.studioName}</p>
             </div>
           </div>
-          {!storageIsDurable() ? (
-            <p className="mb-4 flex items-start gap-2 rounded-lg border bg-warn-soft px-3 py-2 text-[12.5px]">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-              <span>No durable database is configured (set DATABASE_URL to a Postgres database), so the profile lives in temporary storage and can reset on a redeploy.</span>
-            </p>
-          ) : null}
           <ProfileForm defaults={{ displayName: profile.displayName, studioName: profile.studioName, email: profile.email }} />
         </Card>
         <div className="flex flex-col gap-6">

@@ -29,7 +29,7 @@ function MixedSourcesWarning() {
   );
 }
 
-export function ApiKeysForm({ rows, enabled, durable }: { rows: KeyRow[]; enabled: boolean; durable: boolean }) {
+export function ApiKeysForm({ rows, enabled }: { rows: KeyRow[]; enabled: boolean }) {
   const [state, action, pending] = React.useActionState<ApiKeysState, FormData>(saveApiKeysAction, undefined);
   const formRef = React.useRef<HTMLFormElement>(null);
   // Clear typed secrets as soon as a save succeeds; they should not linger in the page.
@@ -57,13 +57,6 @@ export function ApiKeysForm({ rows, enabled, durable }: { rows: KeyRow[]; enable
 
   return (
     <form ref={formRef} action={action} autoComplete="off" className="flex flex-col gap-5">
-      {!durable ? (
-        <p className="flex items-start gap-2 rounded-lg border bg-warn-soft px-3 py-2 text-[12.5px]">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-          <span>No durable database is configured (set DATABASE_URL to a Postgres database), so saved keys live in temporary storage and can disappear on a redeploy or cold start.</span>
-        </p>
-      ) : null}
-
       {mixedHiggsfieldSources ? <MixedSourcesWarning /> : null}
 
       <ul className="flex flex-col gap-4">
