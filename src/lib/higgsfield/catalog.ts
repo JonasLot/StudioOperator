@@ -22,6 +22,7 @@ export interface CatalogModel {
   unitLabel: string;
   output: "image" | "video" | "audio";
   strengths: string;
+  local?: boolean; // runs on this machine through ComfyUI: no cost, no API key
   request?: RequestSpec; // the body fields this model takes; without it only { prompt, image_urls? } is sent
 }
 
@@ -126,6 +127,34 @@ export const MODEL_CATALOG: CatalogModel[] = [
     unitLabel: "per 5s clip",
     output: "video",
     strengths: "Fast, consistent social cutdown footage from references",
+  },
+  {
+    // Runs on this machine through ComfyUI, using the workflow template comfy-workflows/image.json.
+    id: "local-image",
+    label: "Local · ComfyUI image",
+    category: "image",
+    endpoint: "local:comfyui",
+    verified: true,
+    unitCostUsd: 0,
+    unitLabel: "per image (local)",
+    output: "image",
+    strengths: "Free drafts, look development and keyframes on your own GPU",
+    local: true,
+    request: {},
+  },
+  {
+    // Uses comfy-workflows/video.json. Reference images are not passed to local workflows yet.
+    id: "local-video",
+    label: "Local · ComfyUI video",
+    category: "video",
+    endpoint: "local:comfyui",
+    verified: true,
+    unitCostUsd: 0,
+    unitLabel: "per 5s clip (local)",
+    output: "video",
+    strengths: "Free motion tests and cutdowns on your own GPU",
+    local: true,
+    request: { duration: 5 },
   },
   {
     id: "voice-tts",

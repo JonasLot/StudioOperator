@@ -66,6 +66,7 @@ export default async function SettingsPage() {
               detail={config.draft.baseUrl && config.draft.model ? (draftLive() ? `Live · ${config.draft.baseUrl}` : "Set · disabled by mock mode") : "No endpoint · offline drafter in use"}
             />
             <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No Higgsfield key · simulated provider in use"} />
+            <Conn name={`Local generation · ${config.comfy.url}`} ok={!config.mockMode} detail={config.mockMode ? "ComfyUI is not called in mock mode" : "Used by the Local · ComfyUI models. Run the connection test to check it."} />
             <Conn name={`Database · ${config.databasePath}`} ok detail="Local SQLite file on this machine's disk." />
           </ul>
           <Link href="/settings/connection-test" className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground hover:bg-accent/80">

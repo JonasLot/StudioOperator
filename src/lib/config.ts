@@ -30,6 +30,14 @@ export const config = {
   },
   databasePath: defaultDatabasePath(),
 
+  // Local generation through ComfyUI (the "local-*" catalog models). Nothing leaves this machine.
+  comfy: {
+    url: cleanEnv(process.env.COMFYUI_URL) || "http://127.0.0.1:8188",
+    workflowDir: process.env.COMFYUI_WORKFLOW_DIR || "./comfy-workflows",
+    imageLongSide: num(process.env.COMFYUI_IMAGE_SIZE, 1024),
+    videoLongSide: num(process.env.COMFYUI_VIDEO_SIZE, 768),
+  },
+
   // GPT-6 Astra, called through the OpenAI Responses API (the real intake
   // analysis layer). The key is read here, server-side, and never serialised to
   // the client. OPENAI_API_KEY is the primary name; ASTRA_API_KEY is accepted
@@ -129,7 +137,7 @@ export const config = {
     maxAutoSpendPerRepairUsd: num(process.env.AUTONOMY_MAX_REPAIR_SPEND_USD, 8),
     maxAttemptsPerStep: num(process.env.AUTONOMY_MAX_ATTEMPTS_PER_STEP, 16),
     // Catalog model families the agent may choose on its own.
-    allowedModelFamilies: (process.env.AUTONOMY_ALLOWED_FAMILIES || "soul,cinema,kling,seedance,ideogram,edit,upscale,voice")
+    allowedModelFamilies: (process.env.AUTONOMY_ALLOWED_FAMILIES || "soul,cinema,kling,seedance,ideogram,edit,upscale,voice,local")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),

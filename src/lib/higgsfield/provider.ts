@@ -1,5 +1,6 @@
 import "server-only";
-import { higgsfieldLive } from "@/lib/config";
+import { comfyProvider } from "@/lib/comfy/provider";
+import { config, higgsfieldLive } from "@/lib/config";
 import type { Generation, GenerationStatus } from "@/lib/domain/types";
 import { getModel } from "./catalog";
 import { WIRE_CAPABILITIES, wireCancel, wireConnectionTest, wirePoll, wireSubmit } from "./wire";
@@ -56,7 +57,7 @@ export interface ConnectionTestResult {
 }
 
 export interface GenerationProvider {
-  name: "higgsfield" | "mock";
+  name: "higgsfield" | "mock" | "comfyui";
   live: boolean;
   capabilities: ProviderCapabilities;
   submit(input: SubmitInput): Promise<SubmitResult>;
@@ -144,6 +145,9 @@ export const higgsfieldProvider: GenerationProvider = {
   },
 };
 
-export function getProvider(): GenerationProvider {
+/** Mock mode simulates everything. Otherwise local catalog models run on ComfyUI and the rest on Higgsfield (or the simulator without keys). */
+export function getProvider(modelId?: string): GenerationProvider {
+  if (config.mockMode) return mockProvider;
+  if (modelId && getModel(modelId).local) return comfyProvider;
   return higgsfieldLive() ? higgsfieldProvider : mockProvider;
 }

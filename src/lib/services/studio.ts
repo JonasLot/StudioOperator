@@ -20,6 +20,7 @@ import type {
 } from "@/lib/domain/types";
 import { MODEL_CATALOG, getModel } from "@/lib/higgsfield/catalog";
 import { acceptsImageUrls } from "@/lib/higgsfield/request";
+import { comfyProvider } from "@/lib/comfy/provider";
 import { getProvider } from "@/lib/higgsfield/provider";
 import { getRepo } from "@/lib/repo";
 import { describeKeyShape } from "@/lib/secrets/crypto";
@@ -431,7 +432,7 @@ async function submitGeneration(job: Job, wf: Workflow, step: WorkflowStep, atte
     else if (imageUrls.length > 0) await log(job.id, "agent", `“${step.name}” starts from ${imageUrls.length} output${imageUrls.length === 1 ? "" : "s"} of “${refs.from.name}”.`);
     else await log(job.id, "agent", `“${step.name}” continues from “${refs.from.name}” (take ${refs.takeAttempt ?? 1}).`);
   }
-  const provider = getProvider();
+  const provider = getProvider(step.modelId);
   const model = getModel(step.modelId);
   const gen: Generation = {
     id: newId("gen"),
@@ -508,7 +509,6 @@ export async function tick(jobId: string) {
   if (!job || job.status !== "generating") return;
   const wf = await repo.getCurrentWorkflow(jobId);
   if (!wf || wf.approvalStatus !== "approved") return;
-  const provider = getProvider();
   const analysis = await getBrief(jobId);
 
   // 1. poll in-flight work (and enforce the app-level timeout, which is tracked
@@ -521,7 +521,7 @@ export async function tick(jobId: string) {
       continue;
     }
     try {
-      const r = await provider.poll(g);
+      const r = await getProvider(g.model).poll(g);
       const terminal = !["queued", "in_progress"].includes(r.status);
       let outputUrl = g.outputUrl;
       let outputType = g.outputType;
@@ -848,7 +848,7 @@ export async function cancelGeneration(jobId: string, generationId: string) {
   const g = await repo.getGeneration(generationId);
   if (!g || g.jobId !== jobId) throw new GuardrailError("Generation not found.");
   if (g.status !== "queued") throw new GuardrailError("Only queued generations can be cancelled.");
-  const provider = getProvider();
+  const provider = getProvider(g.model);
   if (!provider.capabilities.cancel || !provider.cancel) throw new GuardrailError("This provider does not expose a cancel action.");
   try {
     const r = await provider.cancel(g);
@@ -1025,8 +1025,15 @@ export async function providerConnectionTest(): Promise<{ ok: boolean; detail: s
   const p = getProvider();
   try {
     const r = await p.connectionTest();
-    const detail = p.name === "higgsfield" ? `${r.detail} ${higgsfieldKeyDiagnostics()}` : r.detail;
-    return { ok: r.ok, detail: scrubSecrets(detail), name: p.name, live: p.live };
+    let detail = p.name === "higgsfield" ? `${r.detail} ${higgsfieldKeyDiagnostics()}` : r.detail;
+    let ok = r.ok;
+    if (!config.mockMode) {
+      // Local models run on ComfyUI whatever the cloud provider is, so report it too.
+      const local = await comfyProvider.connectionTest().catch((err: Error) => ({ ok: false, detail: err.message }));
+      detail += ` Local · ${local.detail}`;
+      ok = ok && local.ok;
+    }
+    return { ok, detail: scrubSecrets(detail), name: p.name, live: p.live };
   } catch (err) {
     return { ok: false, detail: scrubSecrets((err as Error).message), name: p.name, live: p.live };
   }
