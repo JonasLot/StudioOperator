@@ -14,65 +14,21 @@ The first request seeds eight demo jobs (one per pipeline column, plus the two f
 
 For a presenter-friendly walkthrough open **`/present`** (see *Recording mode* below).
 
-## Deploy to Vercel
+## Local only
 
-The app runs on Vercel with no configuration — import the GitHub repo and deploy.
-Mock mode is the default, so the live demo needs no API keys.
+StudioOperator runs only on your own machine. There is no hosted deployment, and no Vercel, Supabase,
+Postgres or Turso. Everything is stored in one SQLite file, `./data/studio.db` by default (override with
+`DATABASE_PATH`). The tables are created on first start.
 
-- The SQLite file is written to `/tmp/studio.db` on Vercel automatically (the rest of the
-  filesystem is read-only). `/tmp` is ephemeral and per-instance, so the demo data reseeds
-  on a cold start — fine for a demo. For durable data, implement the `StudioRepository`
-  interface against Postgres (see **Architecture**) and point `DATABASE_PATH` at a mounted disk
-  on a host that provides one (Render, Railway, Fly.io).
-- To go live instead of mock, set `STUDIO_MOCK_MODE=false` plus the Astra and Higgsfield keys
-  from `.env.example` in the Vercel project's Environment Variables, and read **Before going live**.
-
-## Persisting jobs in production
-
-On Vercel the SQLite file lives in `/tmp`, which is wiped on cold starts and not shared between
-serverless instances — so jobs, saved keys, the profile and the Live/mock choice do not survive.
-Point the app at a real database instead. The backend is picked automatically, in this order:
-
-1. **Postgres** — set `DATABASE_URL` (or `POSTGRES_URL`). Recommended.
-2. **Turso / libSQL** — set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
-3. A local **SQLite** file (`DATABASE_PATH`, default `./data/studio.db`) — right for local use or a host with a disk.
-
-All three run the same repository code and the same portable schema; tables are created on first start.
-
-**Postgres with Supabase (about two minutes):** create a project at supabase.com in a region near your
-Vercel functions, open **Connect** and copy the **Transaction pooler** string (port 6543; use the Session pooler on
-a long-running server). Set it as `DATABASE_URL` in `.env.local` and in the Vercel project's Environment Variables:
-
-```
-DATABASE_URL=postgres://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=no-verify
-```
-
-`sslmode=no-verify` avoids *"self-signed certificate in certificate chain"* from `pg` (the connection is still
-encrypted). URL-encode special characters in the password (`@`, `:`, `/`, `#`). Redeploy, and Settings →
-Connections should read *Database · Postgres*. The app only uses Supabase as plain Postgres, so no Supabase client,
-auth or RLS setup is needed. Any other Postgres (Neon, RDS, a local server) works the same way: paste its
-connection string into `DATABASE_URL`.
-
-**Moving data from another Postgres:**
-
-```bash
-pg_dump --no-owner --no-privileges "$OLD_DATABASE_URL" > studio-backup.sql
-psql "$NEW_DATABASE_URL" < studio-backup.sql
-```
-
-Use the Supabase **direct** or **Session pooler** string (port 5432) for the restore, not the Transaction pooler.
-
-**Turso:**
-
-```bash
-turso db create studio-operator
-turso db show studio-operator --url          # -> TURSO_DATABASE_URL
-turso db tokens create studio-operator       # -> TURSO_AUTH_TOKEN
-```
+- **Back up:** copy `data/studio.db` (and the `-wal` / `-shm` files next to it, or stop the server first).
+- **Reset:** stop the server and delete `data/`, or use **Reset demo** in the header.
+- **Go live instead of mock:** set `STUDIO_MOCK_MODE=false` plus the Astra and Higgsfield keys from
+  `.env.example` in `.env.local`, and read **Before going live**.
+- **Client link:** `/c/<token>` is only reachable from this machine. To let a client open it, expose the app
+  yourself (for example a tunnel) and set `APP_URL` to that origin.
 
 The repository interface is async (`src/lib/repo/repository.ts`), the SQL lives in
-`src/lib/repo/sql-repository.ts`, and each database has a small driver in `src/lib/repo/drivers/`. Adding another
-database means writing one more `SqlDriver`.
+`src/lib/repo/sql-repository.ts`, and the SQLite driver is in `src/lib/repo/drivers/`.
 
 ## Client link
 
@@ -104,7 +60,7 @@ name shown in the sidebar, an optional contact email, and your session with a si
 
 **Mock mode** (`/settings`). Switch between mock, live, or "follow `STUDIO_MOCK_MODE`" without redeploying.
 Going live asks for the admin passcode again. Live generation additionally needs the Higgsfield keys and
-`HIGGSFIELD_WIRE_ENABLED=true`. Profile and mode are stored in the database, so use Turso on Vercel for them to persist.
+`HIGGSFIELD_WIRE_ENABLED=true`. Profile and mode are stored in the database.
 
 ## API keys on the Settings page
 
@@ -113,8 +69,7 @@ can fill in or swap keys without redeploying. It is off until the server has an 
 (12+ characters). Every change must include that passcode, keys are stored AES-256-GCM encrypted
 in the database (key derived from the passcode), and values are write-only: the page only shows
 where a key comes from and its last four characters. A key saved here overrides the environment
-variable; ticking *Remove* falls back to it. Use Turso for persistence on Vercel, otherwise saved
-keys live in temporary storage. Mock mode (`STUDIO_MOCK_MODE`) and `HIGGSFIELD_WIRE_ENABLED` are
+variable; ticking *Remove* falls back to it. Mock mode (`STUDIO_MOCK_MODE`) and `HIGGSFIELD_WIRE_ENABLED` are
 still environment settings: keys alone do not switch generation to live.
 
 ## Brief analysis (GPT-6 Astra)
@@ -262,7 +217,7 @@ All checks run server-side; the UI only reflects them.
 ## Architecture
 
 - **Next.js 16 (App Router) + TypeScript, Tailwind v4, shadcn/ui (vendored in `src/components/ui`), Lucide.**
-- **Persistence**: an async `StudioRepository` interface (`src/lib/repo/repository.ts`) implemented once in SQL (`sql-repository.ts`) over a small `SqlDriver` per database — Postgres (`pg`), Turso/libSQL, or a local SQLite file (`better-sqlite3`). `schema.sql` is portable and is applied once per schema version.
+- **Persistence**: an async `StudioRepository` interface (`src/lib/repo/repository.ts`) implemented once in SQL (`sql-repository.ts`) over a small `SqlDriver` per database — a local SQLite file (`better-sqlite3`). `schema.sql` is applied once per schema version.
 - **Secrets**: read only in `src/lib/config.ts` (`server-only`). The browser receives a `publicConfig()` without keys.
 - **Providers**:
   - `src/lib/analysis/astra.ts` — Astra via the OpenAI Responses API with Structured Outputs, validated with zod; falls back to the offline analyzer (`mock.ts`) and logs a warning if the call fails.

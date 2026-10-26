@@ -1,11 +1,10 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { toRowObjects, type SqlDatabase } from "./sync-types";
+import type { SqlDatabase } from "./sync-types";
 import type { Row, SqlDriver } from "../driver";
 
 /**
- * Adapts a synchronous, better-sqlite3-compatible driver (a local SQLite file, or libSQL /
- * Turso) to the async SqlDriver. The calls themselves stay synchronous underneath; what this
+ * Adapts a synchronous, better-sqlite3-compatible driver (the local SQLite file) to the async SqlDriver. The calls themselves stay synchronous underneath; what this
  * adds is a transaction that can span `await`s without another request's statements sneaking
  * into it: while a transaction is open, statements from other call chains wait their turn.
  */
@@ -22,7 +21,7 @@ export class SyncSqlDriver implements SqlDriver {
 
   async query(sql: string, params: unknown[] = []): Promise<Row[]> {
     await this.turn();
-    return toRowObjects(this.db.prepare(sql).all(...params));
+    return this.db.prepare(sql).all(...params) as Row[];
   }
 
   async run(sql: string, params: unknown[] = []): Promise<void> {

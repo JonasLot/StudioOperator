@@ -9,8 +9,7 @@ import { MockModeForm } from "./mock-mode-form";
 import { Button } from "@/components/ui/button";
 import { astraLive, config, draftLive, higgsfieldLive } from "@/lib/config";
 import { SOURCE_LABEL, type JobSource } from "@/lib/domain/types";
-import { storageKind } from "@/lib/repo";
-import { adminPasscode, secretStatus, storageIsDurable } from "@/lib/secrets";
+import { adminPasscode, secretStatus } from "@/lib/secrets";
 import { draftModelSetting, mockSetting, mockSettingSavedAt } from "@/lib/settings";
 import { MANUAL_MARKETPLACE_STEPS } from "@/lib/services/marketplace-policy";
 import { pct } from "@/lib/utils";
@@ -67,36 +66,20 @@ export default async function SettingsPage() {
               detail={config.draft.baseUrl && config.draft.model ? (draftLive() ? `Live · ${config.draft.baseUrl}` : "Set · disabled by mock mode") : "No endpoint · offline drafter in use"}
             />
             <Conn name="Generation · Higgsfield" ok={higgsfieldLive()} detail={hfKey ? (config.mockMode ? "Keys present · disabled by mock mode" : "Live") : "No Higgsfield key · simulated provider in use"} />
-            {storageKind() === "sqlite" ? (
-              <Conn
-                name={`Database · ${config.databasePath}`}
-                ok={!process.env.VERCEL}
-                detail={
-                  !process.env.VERCEL
-                    ? "Local SQLite file on this machine's disk."
-                    : "Temporary local storage. Anything saved here (jobs, keys, profile, mock mode) can disappear on a redeploy or cold start, and each server instance has its own copy. Set DATABASE_URL to a Postgres database (e.g. Supabase) to make it stick."
-                }
-              />
-            ) : (
-              <Conn
-                name={`Database · ${storageKind() === "postgres" ? "Postgres" : "Turso (remote)"}`}
-                ok
-                detail="Durable: jobs, keys, profile and the mock-mode choice survive redeploys and are shared by every server instance."
-              />
-            )}
+            <Conn name={`Database · ${config.databasePath}`} ok detail="Local SQLite file on this machine's disk." />
           </ul>
           <Link href="/settings/connection-test" className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground hover:bg-accent/80">
             <PlugZap className="size-3.5" /> Run a provider connection test
           </Link>
         </Card>
         <Card title="Mock mode">
-          <MockModeForm savedAt={(() => { const t = mockSettingSavedAt(); return t ? `${new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC` : null; })()} durable={storageIsDurable()} current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
+          <MockModeForm savedAt={(() => { const t = mockSettingSavedAt(); return t ? `${new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC` : null; })()} current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
         </Card>
         <Card title="First-phase AI">
           <DraftModelForm baseUrl={config.draft.baseUrl} model={config.draft.model} saved={draftModelSetting() !== null} enabled={adminPasscode() !== null} />
         </Card>
         <Card title="API keys">
-          <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} durable={storageIsDurable()} />
+          <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} />
         </Card>
         <Card title="Autonomy rules">
           <ul className="flex flex-col gap-3 text-[13.5px]">

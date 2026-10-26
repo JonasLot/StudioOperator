@@ -22,7 +22,7 @@ export function DraftModelForm({ baseUrl, model, saved, enabled }: { baseUrl: st
   return (
     <form action={action} autoComplete="off" className="flex flex-col gap-4">
       <p className="text-[13px] text-muted-foreground">
-        A cheap or local model that writes the first draft of each job’s creative brief. Astra then sharpens it with you. Any OpenAI-compatible <code className="rounded bg-muted px-1">/chat/completions</code> endpoint works. The server must be able to reach it, so a local model fits a local run, not Vercel.
+        A cheap or local model that writes the first draft of each job’s creative brief. Astra then sharpens it with you. Any OpenAI-compatible <code className="rounded bg-muted px-1">/chat/completions</code> endpoint works. The server must be able to reach it; a local model (Ollama, LM Studio) fits well.
       </p>
       {!enabled ? (
         <p className="flex items-start gap-2 rounded-lg border bg-muted px-3 py-2 text-[12.5px]">

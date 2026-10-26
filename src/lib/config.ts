@@ -12,20 +12,15 @@ function num(v: string | undefined, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// Pasted env values often arrive wrapped in quotes or with a stray newline/space
-// (a common mistake in dashboards like Vercel). A URL or token never legitimately
-// contains quotes or whitespace, so strip both — libSQL otherwise rejects them as
-// an invalid URI character.
+// Pasted env values often arrive wrapped in quotes or with a stray newline/space.
+// A URL never legitimately contains quotes or whitespace, so strip both.
 function cleanEnv(v: string | undefined) {
   return (v || "").trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
 }
 
-// On read-only serverless hosts (e.g. Vercel) only /tmp is writable, so the
-// SQLite file must live there. Local/long-lived servers keep it in ./data.
+// The local SQLite file. Override with DATABASE_PATH; defaults to ./data/studio.db.
 function defaultDatabasePath() {
-  if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
-  if (process.env.VERCEL) return "/tmp/studio.db";
-  return "./data/studio.db";
+  return process.env.DATABASE_PATH || "./data/studio.db";
 }
 
 export const config = {
@@ -34,21 +29,6 @@ export const config = {
     return isMockMode();
   },
   databasePath: defaultDatabasePath(),
-
-  // A Postgres connection string (Neon, Supabase, Vercel Postgres, RDS, ...) takes precedence over everything
-  // else: durable, shared across serverless instances, and the recommended store on Vercel. Vercel's Neon
-  // integration injects DATABASE_URL / POSTGRES_URL automatically.
-  postgres: {
-    url: cleanEnv(process.env.DATABASE_URL || process.env.POSTGRES_URL),
-  },
-
-  // When a Turso URL is set, the app uses the remote libSQL database (durable and
-  // shared across instances) instead of the local SQLite file — needed for jobs to
-  // persist on serverless hosts like Vercel. See README "Persisting jobs in production".
-  turso: {
-    url: cleanEnv(process.env.TURSO_DATABASE_URL),
-    authToken: cleanEnv(process.env.TURSO_AUTH_TOKEN),
-  },
 
   // GPT-6 Astra, called through the OpenAI Responses API (the real intake
   // analysis layer). The key is read here, server-side, and never serialised to
@@ -97,9 +77,9 @@ export const config = {
   },
 
   // Absolute origin the provider can reach, used to turn stored outputs (/api/asset/…) into reference-image URLs
-  // for the next step. APP_URL wins; Vercel's production/deployment host is the fallback.
+  // for the next step. Set APP_URL (e.g. a tunnel URL) if the provider needs to fetch them.
   publicBaseUrl: (() => {
-    const raw = cleanEnv(process.env.APP_URL) || cleanEnv(process.env.VERCEL_PROJECT_PRODUCTION_URL) || cleanEnv(process.env.VERCEL_URL);
+    const raw = cleanEnv(process.env.APP_URL);
     if (!raw) return "";
     return (/^https?:\/\//.test(raw) ? raw : `https://${raw}`).replace(/\/$/, "");
   })(),
@@ -194,7 +174,7 @@ export function higgsfieldLive() {
 // credentials must never appear anywhere outside the server-side fetch itself.
 export function scrubSecrets(input: string): string {
   let out = input;
-  for (const secret of [config.higgsfield.apiKeySecret, config.higgsfield.apiKeyId, config.openai.apiKey, config.draft.apiKey, config.turso.authToken]) {
+  for (const secret of [config.higgsfield.apiKeySecret, config.higgsfield.apiKeyId, config.openai.apiKey, config.draft.apiKey]) {
     if (secret && secret.length >= 6) out = out.split(secret).join("«redacted»");
   }
   return out;

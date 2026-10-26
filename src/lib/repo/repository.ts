@@ -21,7 +21,7 @@ import type {
 
 /**
  * Persistence boundary. Everything above this interface (services, UI) is storage-agnostic.
- * Every method is async so the same code runs on SQLite, libSQL (Turso) and Postgres
+ * Every method is async so the same code runs on SQLite
  * (see sql-repository.ts and drivers/).
  */
 export interface StudioRepository {

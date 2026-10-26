@@ -139,8 +139,3 @@ export async function saveSecrets(updates: Partial<Record<SecretName, string>>, 
   await refreshSecrets();
   return { ok: true, saved: toSave.map(([n]) => n), removed: remove };
 }
-
-/** True when the database is durable across serverless instances (Postgres or a remote Turso database). */
-export function storageIsDurable(): boolean {
-  return !!(process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.TURSO_DATABASE_URL ?? "").trim();
-}
