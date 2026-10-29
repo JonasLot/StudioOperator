@@ -14,6 +14,7 @@ import { draftModelSetting, mockSetting, mockSettingSavedAt } from "@/lib/settin
 import { MANUAL_MARKETPLACE_STEPS } from "@/lib/services/marketplace-policy";
 import { pct } from "@/lib/utils";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { listEndpointModels } from "@/lib/creative/draft";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ export default async function SettingsPage() {
   // Only booleans about key presence are rendered — never key values.
   const astraKey = config.openai.apiKey.length > 0;
   const hfKey = config.higgsfield.apiKeyId.length > 0 && config.higgsfield.apiKeySecret.length > 0;
+  // Ask the first-phase endpoint what it has, so a saved model that is not installed is flagged on load.
+  const installedDraftModels = config.draft.baseUrl ? await listEndpointModels(config.draft.baseUrl, config.draft.apiKey).catch(() => null) : null;
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -77,7 +80,7 @@ export default async function SettingsPage() {
           <MockModeForm savedAt={(() => { const t = mockSettingSavedAt(); return t ? `${new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC` : null; })()} current={mockSetting()} mockMode={config.mockMode} passcodeConfigured={adminPasscode() !== null} envLabel={process.env.STUDIO_MOCK_MODE ? `currently "${process.env.STUDIO_MOCK_MODE}"` : "currently unset, which means mock"} />
         </Card>
         <Card title="First-phase AI">
-          <DraftModelForm baseUrl={config.draft.baseUrl} model={config.draft.model} saved={draftModelSetting() !== null} enabled={adminPasscode() !== null} />
+          <DraftModelForm baseUrl={config.draft.baseUrl} model={config.draft.model} saved={draftModelSetting() !== null} enabled={adminPasscode() !== null} installed={installedDraftModels} />
         </Card>
         <Card title="API keys">
           <ApiKeysForm rows={secretStatus()} enabled={adminPasscode() !== null} />

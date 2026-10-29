@@ -1,7 +1,7 @@
 import "server-only";
 import { config, draftLive, scrubSecrets } from "@/lib/config";
 import { coerceBrief, type CreativeBrief } from "./brief";
-import { extractChatText, parseJsonLoose } from "./chat";
+import { extractChatText, extractModelIds, isModelNotFound, parseJsonLoose } from "./chat";
 import { mockDraft, type DraftInput } from "./mock";
 
 // ---------------------------------------------------------------------------
@@ -33,8 +33,43 @@ export async function chatRequest(body: Record<string, unknown>) {
     headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
     body: JSON.stringify(body),
     cache: "no-store",
-    signal: AbortSignal.timeout(120_000), // a local model can be slow on first load
+    signal: AbortSignal.timeout(180_000), // a local model can be slow on first load (and reasoning models think first)
   });
+}
+
+/** The models an OpenAI-compatible endpoint offers (GET /models). Throws with a readable reason. */
+export async function listEndpointModels(baseUrl: string, apiKey: string): Promise<string[]> {
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+  } catch (err) {
+    const e = err as Error & { cause?: { code?: string } };
+    if (e.name === "TimeoutError") throw new Error("The endpoint did not answer within 8 seconds.");
+    if (e.cause?.code === "ECONNREFUSED") throw new Error("Nothing is listening there. Is Ollama / LM Studio running?");
+    throw new Error(`Could not reach the endpoint: ${scrubSecrets(e.message)}`);
+  }
+  if (!res.ok) throw new Error(`The endpoint answered ${res.status} to GET /models.`);
+  return extractModelIds(await res.json());
+}
+
+/** Turn a "model not found" 404 into a message that names what is installed. */
+async function explainFailure(status: number, body: string): Promise<string> {
+  if (!isModelNotFound(status, body)) return `request failed (${status}): ${body.slice(0, 200)}`;
+  let installed: string[] = [];
+  try {
+    installed = await listEndpointModels(config.draft.baseUrl, config.draft.apiKey);
+  } catch {
+    /* name what we can */
+  }
+  return `the model “${config.draft.model}” is not installed at ${config.draft.baseUrl}.${installed.length ? ` Available: ${installed.join(", ")}. Pick one under Settings → First-phase AI.` : " Pull it first (ollama pull …) or pick another under Settings → First-phase AI."}`;
+}
+
+export async function failureReason(res: Response): Promise<string> {
+  return explainFailure(res.status, await res.text());
 }
 
 async function draftWithModel(input: DraftInput): Promise<CreativeBrief> {
@@ -50,7 +85,7 @@ async function draftWithModel(input: DraftInput): Promise<CreativeBrief> {
   // Ask for JSON mode, but retry plainly if the endpoint rejects the parameter.
   let res = await chatRequest({ ...body, response_format: { type: "json_object" } });
   if (res.status === 400) res = await chatRequest(body);
-  if (!res.ok) throw new Error(`request failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(await failureReason(res));
   const brief = coerceBrief(parseJsonLoose(extractChatText(await res.json())));
   if (!brief) throw new Error("the answer had no logline");
   return brief;
@@ -61,7 +96,7 @@ export async function draftCreativeBrief(input: DraftInput): Promise<DraftResult
   try {
     return { brief: await draftWithModel(input), drafter: config.draft.model, warning: null };
   } catch (err) {
-    const reason = err instanceof Error && err.name === "TimeoutError" ? "timed out after 2 minutes" : scrubSecrets((err as Error).message);
+    const reason = err instanceof Error && err.name === "TimeoutError" ? "timed out after 3 minutes" : scrubSecrets((err as Error).message);
     return { brief: mockDraft(input), drafter: "mock-draft (fallback)", warning: `${config.draft.model} could not draft, used the offline drafter: ${reason}` };
   }
 }

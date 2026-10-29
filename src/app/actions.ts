@@ -20,6 +20,8 @@ import { parseMockSetting, validateDraftModel, validateProfile, type Profile } f
 import { SECRET_DEFS, SECRET_NAMES, adminPasscode, saveSecrets, verifyAdminPasscode, type SecretName } from "@/lib/secrets";
 
 import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { config } from "@/lib/config";
+import { listEndpointModels } from "@/lib/creative/draft";
 
 /** Every action: must be signed in, and sees current saved settings and keys. */
 async function guard() {
@@ -371,6 +373,19 @@ export async function saveDraftModelAction(_prev: DraftModelState, form: FormDat
   } catch (err) {
     console.error("Saving the first-phase AI failed:", (err as Error).name);
     return { error: "Could not save. Check that the database is reachable." };
+  }
+}
+
+/** The models the given first-phase endpoint offers, so the operator picks one that is actually installed. Reads only. */
+export async function listDraftModelsAction(baseUrl: string): Promise<{ ok: true; models: string[] } | { ok: false; error: string }> {
+  await guard();
+  const r = validateDraftModel({ baseUrl, model: "probe" });
+  if (!r.ok) return { ok: false, error: r.errors.baseUrl ?? "Check the endpoint address." };
+  try {
+    const models = await listEndpointModels(r.value.baseUrl, config.draft.apiKey);
+    return models.length ? { ok: true, models } : { ok: false, error: "The endpoint answered but lists no models. Pull one first (e.g. ollama pull gemma4)." };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
   }
 }
 

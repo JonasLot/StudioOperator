@@ -13,6 +13,7 @@ import { AddStep } from "./step-add";
 import { ReviewToggle, StepTakes } from "./step-takes";
 import { stepAwaitingReview } from "@/lib/services/review-gate";
 import { StepEditor } from "./step-editor";
+import { StepModelPicker } from "./step-model-picker";
 import { CreativeBriefCard } from "./creative-brief";
 import { resolveStepHandoff } from "@/lib/services/handoff";
 
@@ -78,6 +79,9 @@ export function WorkflowTab({ job, workflow, generations, creative, analysis, pr
           const sg = generations.filter((g) => g.stepId === s.id && !g.revisionId);
           const done = sg.filter((g) => g.status === "completed").length;
           const canEdit = editable && (["pending", "failed", "blocked"].includes(s.status) || (s.status === "done" && workflow.approvalStatus === "approved" && ["generating", "qa"].includes(job.status) && !workflow.steps.some((x) => x.order >= s.order && x.status === "running")));
+          const canPickModel = editable && ["pending", "failed", "blocked"].includes(s.status);
+          const editorStep = { id: s.id, name: s.name, category: s.category, purpose: s.purpose, inputs: s.inputs, expectedOutputs: s.expectedOutputs, modelId: s.modelId, status: s.status, unitCost: s.unitCost, estimatedAttempts: s.estimatedAttempts };
+          const categoryModels = MODEL_CATALOG.filter((x) => x.category === s.category).map((x) => ({ id: x.id, label: x.label, unitCostUsd: x.unitCostUsd, unitLabel: x.unitLabel, verified: x.verified, local: x.local }));
           const isLast = s.order === workflow.steps.length;
           const nextStep = workflow.steps.find((x) => x.order > s.order && x.status === "pending");
           const awaiting = job.status === "generating" && nextStep && stepAwaitingReview(workflow, generations, nextStep)?.id === s.id;
@@ -134,10 +138,14 @@ export function WorkflowTab({ job, workflow, generations, creative, analysis, pr
                   </div>
                 </div>
                 <div className="tnum flex w-full flex-col gap-0.5 text-right text-[12.5px] sm:w-56">
-                  <span className="inline-flex items-center justify-end gap-1 font-medium" title={m.verified ? "Endpoint verified against Higgsfield docs" : "Endpoint path to confirm before live use"}>
-                    {m.verified ? <BadgeCheck className="size-3.5 text-ok" /> : <CircleDashed className="size-3.5 text-muted-foreground" />}
-                    {m.label}
-                  </span>
+                  {canPickModel && categoryModels.length > 1 ? (
+                    <StepModelPicker jobId={job.id} step={editorStep} models={categoryModels} />
+                  ) : (
+                    <span className="inline-flex items-center justify-end gap-1 font-medium" title={m.verified ? "Endpoint verified against Higgsfield docs" : "Endpoint path to confirm before live use"}>
+                      {m.verified ? <BadgeCheck className="size-3.5 text-ok" /> : <CircleDashed className="size-3.5 text-muted-foreground" />}
+                      {m.label}
+                    </span>
+                  )}
                   <span className="text-muted-foreground">
                     {s.estimatedAttempts} attempts × {usd(s.unitCost, { cents: true })} <span className="text-[11px]">{m.unitLabel}</span>
                   </span>
@@ -163,8 +171,9 @@ export function WorkflowTab({ job, workflow, generations, creative, analysis, pr
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2">
                   <StepEditor
                     jobId={job.id}
-                    step={{ id: s.id, name: s.name, category: s.category, purpose: s.purpose, inputs: s.inputs, expectedOutputs: s.expectedOutputs, modelId: s.modelId, status: s.status, unitCost: s.unitCost, estimatedAttempts: s.estimatedAttempts }}
-                    models={MODEL_CATALOG.filter((x) => x.category === s.category).map((x) => ({ id: x.id, label: x.label, unitCostUsd: x.unitCostUsd, unitLabel: x.unitLabel, verified: x.verified }))}
+                    key={s.modelId}
+                    step={editorStep}
+                    models={categoryModels}
                     maxAttempts={config.economics.maxAttemptsPerStep}
                     prompts={prompts.filter((p) => p.category === s.category).map((p) => ({ id: p.id, name: p.name, body: p.body, uses: p.uses }))}
                     promptContext={promptContext}

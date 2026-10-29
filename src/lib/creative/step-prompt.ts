@@ -1,7 +1,7 @@
 import "server-only";
 import { config, draftLive, scrubSecrets } from "@/lib/config";
 import { creativeDirectionText, type CreativeBrief } from "./brief";
-import { chatRequest } from "./draft";
+import { chatRequest, failureReason } from "./draft";
 import { extractChatText } from "./chat";
 import { mockStepPrompt } from "./mock";
 
@@ -45,7 +45,7 @@ export async function suggestStepPrompt(step: StepPromptInput, brief: CreativeBr
         { role: "user", content: JSON.stringify({ creativeDirection: creativeDirectionText(brief), step }) },
       ],
     });
-    if (!res.ok) throw new Error(`request failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) throw new Error(await failureReason(res));
     const prompt = clean(extractChatText(await res.json()));
     if (!prompt) throw new Error("the answer was empty");
     return { prompt, drafter: config.draft.model, warning: null };
