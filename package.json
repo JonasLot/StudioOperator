@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/analysis/*.test.ts src/lib/router/*.test.ts src/lib/qa/*.test.ts src/lib/agency/*.test.ts src/lib/secrets/*.test.ts src/lib/auth/*.test.ts src/lib/settings/*.test.ts src/lib/repo/*.test.ts src/lib/higgsfield/*.test.ts src/lib/services/*.test.ts src/lib/creative/*.test.ts src/lib/prompts/*.test.ts",
+    "test": "node --import tsx --test src/lib/analysis/*.test.ts src/lib/router/*.test.ts src/lib/qa/*.test.ts src/lib/agency/*.test.ts src/lib/secrets/*.test.ts src/lib/auth/*.test.ts src/lib/settings/*.test.ts src/lib/repo/*.test.ts src/lib/higgsfield/*.test.ts src/lib/comfy/*.test.ts src/lib/services/*.test.ts src/lib/creative/*.test.ts src/lib/prompts/*.test.ts",
     "hf:example": "tsx index.ts"
   },
   "dependencies": {

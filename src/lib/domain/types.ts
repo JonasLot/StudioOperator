@@ -117,7 +117,7 @@ export interface Generation {
   stepId: string;
   revisionId: string | null;
   attempt: number;
-  provider: "higgsfield" | "mock";
+  provider: "higgsfield" | "mock" | "comfyui";
   providerRequestId: string | null;
   statusUrl: string | null;
   model: string;
