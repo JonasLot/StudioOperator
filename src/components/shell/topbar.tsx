@@ -12,7 +12,7 @@ function crumb(pathname: string) {
   if (pathname.startsWith("/jobs/")) return "Job details";
   if (pathname.startsWith("/approvals")) return "Approvals";
   if (pathname.startsWith("/outputs")) return "Outputs";
-  if (pathname.startsWith("/models")) return "Model router";
+  if (pathname.startsWith("/models")) return "Models";
   if (pathname.startsWith("/settings")) return "Autonomy & connections";
   if (pathname.startsWith("/profile")) return "Profile";
   return "";
