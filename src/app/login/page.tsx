@@ -19,8 +19,8 @@ export default async function LoginPage(props: PageProps<"/login">) {
         <div className="mb-8 flex items-center gap-2.5">
           <Layers className="size-6 text-brand" strokeWidth={1.75} />
           <span className="text-[22px] tracking-[-0.03em]">
-            <span className="font-semibold">studio</span>
-            <span className="font-normal">operator</span>
+            <span className="font-semibold">&amp;more</span>
+            <span className="font-normal">design</span>
           </span>
         </div>
         <section className="rounded-xl border bg-card p-6 shadow-[0_1px_2px_rgb(0_0_0/0.03)]">

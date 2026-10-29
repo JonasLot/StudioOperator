@@ -24,8 +24,8 @@ export function Logo({ compact = false }: { compact?: boolean }) {
       <Layers className="mt-1 size-5 shrink-0 text-brand" strokeWidth={1.75} />
       <span className="flex flex-col">
         <span className="text-[19px] leading-tight tracking-[-0.03em]">
-          <span className="font-semibold">studio</span>
-          <span className="font-normal">operator</span>
+          <span className="font-semibold">&amp;more</span>
+          <span className="font-normal">design</span>
         </span>
         {!compact ? <span className="mt-0.5 text-[8.5px] font-medium uppercase leading-snug tracking-[0.2em] text-muted-foreground">Your creative<br />operating system</span> : null}
       </span>
