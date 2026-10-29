@@ -26,7 +26,7 @@ function draftDeliveryNote(job: Job, analysis: BriefView | null, selectedCount: 
     ``,
     `Everything was produced inside the approved budget and timeline. Let us know and we'll prepare final delivery.`,
     ``,
-    `— Studio Operator (draft prepared by GPT-6 Astra; review before sending)`,
+    `— &more Design (draft prepared by GPT-6 Astra; review before sending)`,
   ].join("\n");
 }
 

@@ -102,7 +102,7 @@ export default async function SettingsPage() {
           </ul>
         </Card>
         <Card title="Marketplaces stay manual">
-          <p className="flex items-start gap-2 text-[13.5px] text-muted-foreground"><Store className="mt-0.5 size-4 shrink-0" /> Studio Operator never scrapes, proposes, accepts, messages or delivers on a marketplace. There are no approved integrations.</p>
+          <p className="flex items-start gap-2 text-[13.5px] text-muted-foreground"><Store className="mt-0.5 size-4 shrink-0" /> &more Design never scrapes, proposes, accepts, messages or delivers on a marketplace. There are no approved integrations.</p>
           <ul className="mt-3 flex flex-col gap-1.5 text-[13px]">
             {[...MANUAL_MARKETPLACE_STEPS.before, ...MANUAL_MARKETPLACE_STEPS.after].map((s) => <li key={s.action}>· {s.label}</li>)}
           </ul>

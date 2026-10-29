@@ -169,13 +169,13 @@ export async function runIntakeConversation(jobId: string): Promise<void> {
   if (questions.length) {
     await draftMessage(jobId, "intake_questions", {
       subject: `A few questions on "${job.title}"`,
-      body: [`Hi ${job.clientName ?? "there"},`, ``, `Before I quote, a few things that materially affect the result:`, ...questions.map((q, i) => `  ${i + 1}. ${q.question} (${q.category})`), ``, `— Studio Operator`].join("\n"),
+      body: [`Hi ${job.clientName ?? "there"},`, ``, `Before I quote, a few things that materially affect the result:`, ...questions.map((q, i) => `  ${i + 1}. ${q.question} (${q.category})`), ``, `— &more Design`].join("\n"),
     });
   }
   if (assets.length) {
     await draftMessage(jobId, "asset_request", {
       subject: `Assets I'll need for "${job.title}"`,
-      body: [`Hi ${job.clientName ?? "there"},`, ``, `To produce this well, could you send:`, ...assets.map((a) => `  • ${a.asset} — ${a.why}`), ``, `— Studio Operator`].join("\n"),
+      body: [`Hi ${job.clientName ?? "there"},`, ``, `To produce this well, could you send:`, ...assets.map((a) => `  • ${a.asset} — ${a.why}`), ``, `— &more Design`].join("\n"),
     });
   }
 }
@@ -186,7 +186,7 @@ export async function askClientQuestion(jobId: string, question: string): Promis
   const job = (await repo.getJob(jobId))!;
   return draftMessage(jobId, "intake_questions", {
     subject: `Quick question on "${job.title}"`,
-    body: [`Hi ${job.clientName ?? "there"},`, ``, question, ``, `— Studio Operator`].join("\n"),
+    body: [`Hi ${job.clientName ?? "there"},`, ``, question, ``, `— &more Design`].join("\n"),
   });
 }
 

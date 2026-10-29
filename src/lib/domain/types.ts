@@ -1,4 +1,4 @@
-// Core domain records for Studio Operator.
+// Core domain records for &more Design.
 // These are persistence-agnostic: the repository layer maps them to/from storage.
 
 import type { Analysis } from "@/lib/analysis/schema";

@@ -4,7 +4,7 @@ import { GuardrailError } from "./guardrails";
 /**
  * Marketplace boundary.
  *
- * Studio Operator never talks to Upwork, Fiverr, Contra or any other marketplace. Briefs arrive by
+ * &more Design never talks to Upwork, Fiverr, Contra or any other marketplace. Briefs arrive by
  * paste; proposals, contracts, messages and deliveries happen by hand in the marketplace itself.
  *
  * To automate one of these actions later, a future change must add an explicit, human-approved
@@ -24,7 +24,7 @@ export const APPROVED_MARKETPLACE_INTEGRATIONS: ReadonlyArray<{ action: Marketpl
 export function assertMarketplaceActionAllowed(action: MarketplaceAction, source: JobSource): never | void {
   const ok = APPROVED_MARKETPLACE_INTEGRATIONS.some((i) => i.action === action && i.source === source);
   if (!ok) {
-    throw new GuardrailError(`"${action}" on ${source} is a manual step. Studio Operator has no approved integration for it.`);
+    throw new GuardrailError(`"${action}" on ${source} is a manual step. &more Design has no approved integration for it.`);
   }
 }
 

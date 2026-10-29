@@ -6,7 +6,7 @@ import { LoginForm } from "./login-form";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Sign in · Studio Operator" };
+export const metadata = { title: "Sign in · &more Design" };
 
 export default async function LoginPage(props: PageProps<"/login">) {
   // Nothing to sign in with, or already signed in: go straight to the app.

@@ -1,4 +1,4 @@
-# Studio Operator
+# &more Design
 
 Internal operating system for a one-person AI creative studio. Paste a client brief, get structured requirements, an accept / review / reject decision, a costed production plan on Higgsfield models, and a human-gated production loop with outputs, QA and revisions.
 
@@ -16,7 +16,7 @@ For a presenter-friendly walkthrough open **`/present`** (see *Recording mode* b
 
 ## Local only
 
-StudioOperator runs only on your own machine. There is no hosted deployment, and no Vercel, Supabase,
+&more Design runs only on your own machine. There is no hosted deployment, and no Vercel, Supabase,
 Postgres or Turso. Everything is stored in one SQLite file, `./data/studio.db` by default (override with
 `DATABASE_PATH`). The tables are created on first start.
 
@@ -174,7 +174,7 @@ When the verdict calls for a fix, `src/lib/qa/repair.ts` proposes a **targeted r
 
 ## Supervised autonomy (the Client Agent)
 
-Studio Operator runs as a **supervised autonomous creative agency**: the agent runs the routine client relationship from intake through revisions, while the human stays responsible for the promises that matter — accepting contracts, approving payments or spend above a threshold, resolving rights/identity, and approving final delivery.
+&more Design runs as a **supervised autonomous creative agency**: the agent runs the routine client relationship from intake through revisions, while the human stays responsible for the promises that matter — accepting contracts, approving payments or spend above a threshold, resolving rights/identity, and approving final delivery.
 
 - **Client Agent** (`src/lib/agency/client-agent.ts`, pure + tested) turns a vague request into a structured intake conversation, asks only the questions that materially affect quality/cost/rights/deadline, requests specific assets (product image, logo, brand guide, exact copy, pronunciation, voice/likeness consent, likes and dislikes), summarizes scope, drafts a proposal, sends real-milestone progress updates, presents concepts with what changed + the decision needed, interprets revision feedback (which asset/step, included vs scope change), drafts a change order when scope is exceeded, prepares the delivery package + usage notes, and drafts a post-delivery feedback/testimonial/recurring-package ask.
 - **Marketplace-safe messaging** (`src/lib/services/agency.ts`): a message is auto-sent only on an allowed channel (direct email / approved first-party portal) and only for a type enabled in Autonomy Settings. **Third-party marketplaces are never auto-sent** — no scraping, auto-apply, proposal send, or contract accept — until the app receives an approved integration for that exact action.

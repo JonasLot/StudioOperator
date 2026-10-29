@@ -617,7 +617,7 @@ export async function tick(jobId: string) {
     await repo.updateJob(jobId, { status: "qa" });
     await log(jobId, "agent", "Production complete. Moved to QA for human review.");
     await audit({ jobId, kind: "decision", summary: "Production complete → moved to QA. Final delivery awaits human approval." });
-    await requestApproval(jobId, "final_delivery", "Approve final delivery", "Review outputs. Delivery to the client is done by you, outside Studio Operator.", null, null);
+    await requestApproval(jobId, "final_delivery", "Approve final delivery", "Review outputs. Delivery to the client is done by you, outside &more Design.", null, null);
   }
 }
 

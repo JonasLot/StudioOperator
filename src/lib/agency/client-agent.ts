@@ -136,7 +136,7 @@ export function draftProposal(p: ProposalInput): { subject: string; body: string
     ``,
     `If that looks right, approve and I'll get the look locked on keyframes first.`,
     ``,
-    `— Studio Operator`,
+    `— &more Design`,
   ].join("\n");
   return { subject: `Proposal — ${p.title}`, body };
 }
@@ -154,7 +154,7 @@ const MILESTONE_COPY: Record<Milestone, { subject: string; line: string }> = {
 
 export function draftProgressUpdate(milestone: Milestone, opts: { title: string; clientName: string | null }): { subject: string; body: string } {
   const c = MILESTONE_COPY[milestone];
-  const body = [`Hi ${opts.clientName ?? "there"},`, ``, `${c.line}`, ``, `— Studio Operator`].join("\n");
+  const body = [`Hi ${opts.clientName ?? "there"},`, ``, `${c.line}`, ``, `— &more Design`].join("\n");
   return { subject: `${c.subject} — ${opts.title}`, body };
 }
 
@@ -166,7 +166,7 @@ export function presentConcept(opts: { title: string; clientName: string | null;
     ``,
     `What I need from you: ${opts.decisionNeeded}`,
     ``,
-    `— Studio Operator`,
+    `— &more Design`,
   ].join("\n");
   return { subject: `Concepts for your call — ${opts.title}`, body, decisionNeeded: opts.decisionNeeded };
 }
@@ -214,7 +214,7 @@ export function draftRevisionReply(opts: { clientName: string | null; interpreta
   const line = i.kind === "included"
     ? `Got it — that's an included revision. I'll take it into the ${i.affectedStep} stage and send an updated cut.`
     : `Thanks — that one goes a little beyond the agreed scope, so I've drafted a short change order for your call before we proceed.`;
-  const body = [`Hi ${opts.clientName ?? "there"},`, ``, `On your note "${opts.note.trim()}":`, line, ``, `— Studio Operator`].join("\n");
+  const body = [`Hi ${opts.clientName ?? "there"},`, ``, `On your note "${opts.note.trim()}":`, line, ``, `— &more Design`].join("\n");
   return { subject: "On your revision note", body };
 }
 
@@ -230,7 +230,7 @@ export function draftChangeOrder(opts: { title: string; clientName: string | nul
     ``,
     `Approve this and I'll fold it in; otherwise we'll deliver the original scope as agreed.`,
     ``,
-    `— Studio Operator`,
+    `— &more Design`,
   ].join("\n");
   return { subject: `Change order — ${opts.title}`, body };
 }
@@ -265,7 +265,7 @@ export function deliveryPackage(opts: {
     ``,
     `Let me know if you'd like anything tweaked within the included revisions.`,
     ``,
-    `— Studio Operator`,
+    `— &more Design`,
   ].join("\n");
   return { fileList, usageNotes, message };
 }
@@ -279,7 +279,7 @@ export function postDeliveryAsk(opts: { title: string; clientName: string | null
     `  2. If you were happy, would you be open to a short testimonial?`,
     `  3. A lot of clients keep a steady stream going — want me to put together a recurring creative package (e.g. a monthly set of cutdowns)?`,
     ``,
-    `— Studio Operator`,
+    `— &more Design`,
   ].join("\n");
   return { subject: `Quick follow-up — ${opts.title}`, body };
 }

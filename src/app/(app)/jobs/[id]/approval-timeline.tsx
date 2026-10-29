@@ -57,7 +57,7 @@ export function ApprovalTimeline({ bundle, p }: { bundle: JobBundle; p: Profitab
     state: wfApproved ? "done" : rejected ? "stopped" : job.status === "needs_review" ? "waiting" : "upcoming",
     detail: wfApproved ? `Cap ${usd(workflow!.maxBudget)} · ${workflow!.approvedBy}` : workflow ? `Proposed cap ${usd(workflow.maxBudget)}` : undefined,
   });
-  stages.push({ key: "contract", title: `Send proposal & accept contract on ${src}`, who: "manual", state: "manual", detail: "You, outside Studio Operator" });
+  stages.push({ key: "contract", title: `Send proposal & accept contract on ${src}`, who: "manual", state: "manual", detail: "You, outside &more Design" });
 
   const budgetGates = find("budget_increase");
   stages.push({
@@ -88,7 +88,7 @@ export function ApprovalTimeline({ bundle, p }: { bundle: JobBundle; p: Profitab
     state: job.status === "delivered" ? "done" : fd?.status === "pending" ? "waiting" : rejected ? "stopped" : "upcoming",
     detail: job.deliveredAt ? dateTime(job.deliveredAt) : undefined,
   });
-  stages.push({ key: "handoff", title: `Deliver files on ${src}`, who: "manual", state: "manual", detail: "You, outside Studio Operator" });
+  stages.push({ key: "handoff", title: `Deliver files on ${src}`, who: "manual", state: "manual", detail: "You, outside &more Design" });
 
   return (
     <section className="rounded-xl border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)]" aria-label="Approval timeline">
