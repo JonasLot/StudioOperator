@@ -1,6 +1,6 @@
 # Local workflows (ComfyUI)
 
-StudioOperator's **Local · ComfyUI image** and **Local · ComfyUI video** models run on your own machine
+&more Design's **Local · ComfyUI image** and **Local · ComfyUI video** models run on your own machine
 through [ComfyUI](https://github.com/comfyanonymous/ComfyUI). They cost nothing and need no API key.
 
 ## Set up
@@ -9,8 +9,8 @@ through [ComfyUI](https://github.com/comfyanonymous/ComfyUI). They cost nothing 
 2. Build the workflow you want in ComfyUI, with your own checkpoint, LoRAs and so on.
 3. Enable *Dev mode options* in ComfyUI's settings, then **Save (API Format)**.
 4. Save the file here as `image.json` (for the image model) and/or `video.json` (for the video model).
-5. Replace the values you want StudioOperator to control with placeholders (see below).
-6. In StudioOperator, turn mock mode off (Settings → Mock mode → Live) and pick a *Local · ComfyUI* model on a step.
+5. Replace the values you want &more Design to control with placeholders (see below).
+6. In &more Design, turn mock mode off (Settings → Mock mode → Live) and pick a *Local · ComfyUI* model on a step.
    Settings → *Run a provider connection test* checks ComfyUI and that the templates exist.
 
 `image.example.json` is a minimal SDXL-style graph to copy from. Change `ckpt_name` to a checkpoint you have.
