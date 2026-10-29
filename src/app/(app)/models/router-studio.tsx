@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { routerModel } from "@/lib/router/catalog";
-import { priceRoute, proposeRoute, type RouteInput, type StageSelection } from "@/lib/router/route";
+import { priceRoute, proposeRoute, shipAttemptsFor, type RouteInput, type StageSelection } from "@/lib/router/route";
 import { cn, usd } from "@/lib/utils";
 
 const ROLE_CHIP: Record<string, string> = {
@@ -106,7 +106,13 @@ export function RouterStudio() {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <Label className="w-24 shrink-0">Model</Label>
-                  <NativeSelect value={s.model.id} onChange={(e) => setOverrides((p) => ({ ...p, [i]: { ...p[i], selectedId: e.target.value } }))}>
+                  <NativeSelect value={s.model.id} onChange={(e) => {
+                    const id = e.target.value;
+                    const next = routerModel(id);
+                    // A different ship model has a different clip length, so recompute its attempts.
+                    const attempts = s.key === "ship" && next ? shipAttemptsFor(next, input) : undefined;
+                    setOverrides((p) => ({ ...p, [i]: { ...p[i], selectedId: id, ...(attempts !== undefined ? { attempts } : {}) } }));
+                  }}>
                     {s.candidateIds.map((id) => { const m = routerModel(id); return <option key={id} value={id}>{m?.label ?? id}{m && !m.listed ? " — not in catalog" : ""}</option>; })}
                   </NativeSelect>
                 </div>
