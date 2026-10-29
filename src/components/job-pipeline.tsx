@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ArrowUpRight, Clapperboard, Clock, FileText, Hand, ImageIcon, Loader2, Search } from "lucide-react";
+import { Archive, ArrowLeft, ArrowUpRight, Clapperboard, Clock, FileText, Hand, ImageIcon, Loader2, Search } from "lucide-react";
+import { ArchiveClosedButton } from "@/components/archive-closed-button";
 import { Progress } from "@/components/ui/progress";
+import { CLOSED_STATUSES, canArchive } from "@/lib/domain/archive";
 import { JOB_STATUSES, SOURCE_LABEL, type JobStatus } from "@/lib/domain/types";
 import type { getDashboard } from "@/lib/services/studio";
 import { STATUS_META } from "@/lib/status-meta";
@@ -15,21 +17,45 @@ export function StatusPill({ status, className }: { status: JobStatus; className
   return <span className={cn("inline-flex items-center rounded-md px-2 py-1 text-[12px] font-medium whitespace-nowrap", m.pill, className)}>{m.label}</span>;
 }
 
-function href(base: string, status: string | null, q: string) {
+export type PipelineView = "current" | "archived";
+
+function href(base: string, status: string | null, q: string, view: PipelineView = "current") {
   const p = new URLSearchParams();
+  if (view === "archived") p.set("view", "archived");
   if (status) p.set("status", status);
   if (q) p.set("q", q);
   const s = p.toString();
   return s ? `${base}?${s}` : base;
 }
 
-export function JobPipeline({ rows, status, q, basePath, title = "Job pipeline", subtitle = "From first brief to final handoff." }: { rows: Row[]; status: JobStatus | null; q: string; basePath: string; title?: string; subtitle?: string }) {
+export function JobPipeline({
+  rows,
+  status,
+  q,
+  basePath,
+  title = "Job pipeline",
+  subtitle = "From first brief to final handoff.",
+  view = "current",
+  archivedCount,
+}: {
+  rows: Row[];
+  status: JobStatus | null;
+  q: string;
+  basePath: string;
+  title?: string;
+  subtitle?: string;
+  view?: PipelineView;
+  /** When given, shows a link to the archive and a bulk "archive closed" button. */
+  archivedCount?: number;
+}) {
+  const stages: readonly JobStatus[] = view === "archived" ? CLOSED_STATUSES : JOB_STATUSES;
+  const closedCount = view === "current" ? rows.filter((r) => canArchive(r.job)).length : 0;
   const query = q.trim().toLowerCase();
   const searched = query
     ? rows.filter((r) => [r.job.title, r.job.clientName ?? "", SOURCE_LABEL[r.job.source], r.job.rawBrief].some((t) => t.toLowerCase().includes(query)))
     : rows;
   const visible = status ? searched.filter((r) => r.job.status === status) : searched;
-  const groups = JOB_STATUSES.map((s) => ({ s, items: visible.filter((r) => r.job.status === s) })).filter((g) => g.items.length);
+  const groups = stages.map((s) => ({ s, items: visible.filter((r) => r.job.status === s) })).filter((g) => g.items.length);
 
   return (
     <section aria-label={title} className="flex flex-col gap-5">
@@ -41,7 +67,29 @@ export function JobPipeline({ rows, status, q, basePath, title = "Job pipeline",
           </h2>
           <p className="mt-1 text-[13px] text-muted-foreground">{subtitle}</p>
         </div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          {archivedCount !== undefined && view === "current" ? (
+            <>
+              <ArchiveClosedButton count={closedCount} />
+              <Link
+                href={href(basePath, null, "", "archived")}
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Archive className="size-4" strokeWidth={1.6} /> Archive
+                <span className="tnum rounded bg-muted px-1.5 py-px text-[10.5px] font-medium">{archivedCount}</span>
+              </Link>
+            </>
+          ) : null}
+          {view === "archived" ? (
+            <Link
+              href={href(basePath, null, "")}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" strokeWidth={1.6} /> Back to pipeline
+            </Link>
+          ) : null}
         <form action={basePath} className="relative w-full sm:w-64" role="search">
+          {view === "archived" ? <input type="hidden" name="view" value="archived" /> : null}
           {status ? <input type="hidden" name="status" value={status} /> : null}
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -51,17 +99,18 @@ export function JobPipeline({ rows, status, q, basePath, title = "Job pipeline",
             className="h-10 w-full rounded-lg border bg-card pl-9 pr-3 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25"
           />
         </form>
+        </div>
       </div>
 
       <div className="-mx-4 overflow-x-auto px-4">
-        <div className="grid min-w-[760px] grid-cols-7 gap-3" role="tablist" aria-label="Filter by stage">
-          {JOB_STATUSES.map((s) => {
+        <div className={cn("grid gap-3", view === "archived" ? "max-w-md grid-cols-2" : "min-w-[760px] grid-cols-7")} role="tablist" aria-label="Filter by stage">
+          {stages.map((s) => {
             const n = searched.filter((r) => r.job.status === s).length;
             const active = status === s;
             return (
               <Link
                 key={s}
-                href={href(basePath, active ? null : s, q)}
+                href={href(basePath, active ? null : s, q, view)}
                 role="tab"
                 aria-selected={active}
                 data-column={s}
@@ -86,7 +135,13 @@ export function JobPipeline({ rows, status, q, basePath, title = "Job pipeline",
         </div>
         {groups.length === 0 ? (
           <div className="px-6 py-14 text-center text-[13px] text-muted-foreground">
-            {query ? `No jobs match “${q}”.` : status ? `Nothing in ${STATUS_META[status].label} right now.` : "No jobs yet — paste your first brief."}
+            {query
+              ? `No jobs match “${q}”.`
+              : status
+                ? `Nothing in ${STATUS_META[status].label} right now.`
+                : view === "archived"
+                  ? "The archive is empty. Delivered and rejected jobs can be archived from the pipeline."
+                  : "No jobs yet — paste your first brief."}
           </div>
         ) : null}
         {groups.map(({ s, items }) => (

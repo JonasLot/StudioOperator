@@ -343,6 +343,7 @@ export async function seedDemo() {
     rightsCleared: false,
     templateId: null,
     deliveredAt: null,
+    archivedAt: null,
     createdAt: t,
     updatedAt: t,
   });

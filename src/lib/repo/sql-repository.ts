@@ -97,6 +97,7 @@ export const MIGRATIONS = [
   "ALTER TABLE generations ADD COLUMN review_status TEXT NOT NULL DEFAULT 'pending'",
   "ALTER TABLE generations ADD COLUMN review_note TEXT",
   "ALTER TABLE workflow_steps ADD COLUMN requires_review INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE jobs ADD COLUMN archived_at TEXT",
 ];
 
 // ---------- repository ----------

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { CircleCheck, Images, Play, ShieldCheck, Sparkles } from "lucide-react";
-import { analyzeAction, startProductionAction } from "@/app/actions";
+import { Archive, ArchiveRestore, CircleCheck, Images, Play, ShieldCheck, Sparkles } from "lucide-react";
+import { analyzeAction, archiveJobAction, startProductionAction, unarchiveJobAction } from "@/app/actions";
 import { ActionButton } from "@/components/action-button";
 import { Button } from "@/components/ui/button";
 import type { JobStatus } from "@/lib/domain/types";
@@ -10,7 +10,21 @@ import type { JobStatus } from "@/lib/domain/types";
 const BIG = "h-11 rounded-lg px-5 text-[14px] shadow-sm";
 
 /** The single most useful next step for this job, top-right like a document's primary action. */
-export function PrimaryAction({ jobId, status, hasAnalysis }: { jobId: string; status: JobStatus; hasAnalysis: boolean }) {
+export function PrimaryAction({ jobId, status, hasAnalysis, archived = false }: { jobId: string; status: JobStatus; hasAnalysis: boolean; archived?: boolean }) {
+  if (archived) {
+    return (
+      <ActionButton variant="outline" className={BIG} action={() => unarchiveJobAction(jobId)}>
+        <ArchiveRestore /> Restore to pipeline
+      </ActionButton>
+    );
+  }
+  if (status === "delivered" || status === "rejected") {
+    return (
+      <ActionButton variant="outline" className={BIG} action={() => archiveJobAction(jobId)}>
+        <Archive /> Archive job
+      </ActionButton>
+    );
+  }
   if (status === "new" || !hasAnalysis) {
     return (
       <ActionButton className={BIG} action={() => analyzeAction(jobId)}>

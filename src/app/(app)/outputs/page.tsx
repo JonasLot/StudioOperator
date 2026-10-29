@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
 export default async function OutputsPage() {
   await loadRuntimeConfig();
   const repo = getRepo();
-  const jobs = await repo.listJobs();
+  // Archived jobs are filed away; their outputs stay reachable from the job itself.
+  const jobs = (await repo.listJobs()).filter((j) => !j.archivedAt);
   const sections = (
     await Promise.all(
       jobs.map(async (job) => {

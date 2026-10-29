@@ -5,6 +5,7 @@ import { deriveBriefFacts } from "@/lib/analysis/view";
 import { config, scrubSecrets } from "@/lib/config";
 import { persistAsset } from "@/lib/higgsfield/asset-store";
 import { TAKE_REVIEWS } from "@/lib/domain/types";
+import { canArchive } from "@/lib/domain/archive";
 import type {
   TakeReview,
   ApprovalKind,
@@ -171,6 +172,7 @@ export async function createJob(input: NewJobInput) {
     rightsCleared: false,
     templateId: input.templateId ?? null,
     deliveredAt: null,
+    archivedAt: null,
     createdAt: now(),
     updatedAt: now(),
   };
@@ -352,7 +354,7 @@ export async function reopenJob(jobId: string) {
   const job = await repo.getJob(jobId);
   if (!job || job.status !== "rejected") throw new GuardrailError("Only rejected jobs can be reopened.");
   await log(jobId, "operator", "Reopened job for review (override).");
-  await repo.updateJob(jobId, { status: "needs_review" });
+  await repo.updateJob(jobId, { status: "needs_review", archivedAt: null });
   const wf = await repo.getCurrentWorkflow(jobId);
   const analysis = await getBrief(jobId);
   if (wf && analysis) {
@@ -361,6 +363,43 @@ export async function reopenJob(jobId: string) {
     if (analysis.rightsConcerns.length) await requestApproval(jobId, "rights_clearance", "Clear rights concerns", analysis.rightsConcerns.join(" "), null, analysis.id);
     await requestApproval(jobId, "initial_workflow", "Approve workflow & maximum budget", `Plan v${wf.version} (reopened after rejection).`, wf.maxBudget, wf.id);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Archive — files closed jobs away from the pipeline. Nothing is deleted; a job can be restored.
+// ---------------------------------------------------------------------------
+
+export async function archiveJob(jobId: string) {
+  const repo = getRepo();
+  const job = await repo.getJob(jobId);
+  if (!job) throw new GuardrailError("Job not found.");
+  if (job.archivedAt) return;
+  if (!canArchive(job)) throw new GuardrailError("Only delivered or rejected jobs can be archived.");
+  await repo.updateJob(jobId, { archivedAt: now() });
+  await log(jobId, "operator", "Archived job.");
+}
+
+export async function unarchiveJob(jobId: string) {
+  const repo = getRepo();
+  const job = await repo.getJob(jobId);
+  if (!job) throw new GuardrailError("Job not found.");
+  if (!job.archivedAt) return;
+  await repo.updateJob(jobId, { archivedAt: null });
+  await log(jobId, "operator", "Restored job from the archive.");
+}
+
+/** Archive every closed job still in the pipeline. Returns how many were filed away. */
+export async function archiveClosedJobs(): Promise<number> {
+  const repo = getRepo();
+  const closed = (await repo.listJobs()).filter(canArchive);
+  await repo.transaction(async () => {
+    const at = now();
+    for (const j of closed) {
+      await repo.updateJob(j.id, { archivedAt: at });
+      await log(j.id, "operator", "Archived job (bulk).");
+    }
+  });
+  return closed.length;
 }
 
 // ---------------------------------------------------------------------------

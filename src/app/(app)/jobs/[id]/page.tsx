@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock, FileText, Gavel, Images, ListOrdered, MessageSquareDiff, Receipt, Share2 } from "lucide-react";
+import { Archive, ArrowLeft, Clock, FileText, Gavel, Images, ListOrdered, MessageSquareDiff, Receipt, Share2 } from "lucide-react";
 import { ProductionPoller } from "@/components/poller";
 import { StatusPill } from "@/components/job-pipeline";
 import { publicConfig } from "@/lib/config";
@@ -51,8 +51,8 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
   return (
     <div className="flex flex-col gap-7">
       <ProductionPoller jobId={job.id} active={active} />
-      <Link href="/jobs" className="inline-flex w-fit items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-3.5" /> All jobs
+      <Link href={job.archivedAt ? "/jobs?view=archived" : "/jobs"} className="inline-flex w-fit items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-3.5" /> {job.archivedAt ? "Archive" : "All jobs"}
       </Link>
 
       <header className="flex flex-wrap items-start justify-between gap-6">
@@ -69,6 +69,11 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
           {intake?.warning ? <p className="mt-2 max-w-[60ch] break-words rounded-md bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{intake.warning}</p> : null}
           <div className="mt-4 flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
             <StatusPill status={job.status} />
+            {job.archivedAt ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 font-medium">
+                <Archive className="size-3.5" strokeWidth={1.7} /> Archived {shortDate(job.archivedAt)}
+              </span>
+            ) : null}
             <span className="inline-flex items-center gap-1.5 px-1.5">
               <Clock className="size-3.5" strokeWidth={1.7} /> Due {shortDate(job.deadline)}
               {!["delivered", "rejected"].includes(job.status) ? <span className={d <= 2 ? "text-bad" : ""}>· {d}d</span> : null}
@@ -87,7 +92,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
             ) : null}
           </div>
         </div>
-        <PrimaryAction jobId={job.id} status={job.status} hasAnalysis={!!analysis} />
+        <PrimaryAction jobId={job.id} status={job.status} hasAnalysis={!!analysis} archived={!!job.archivedAt} />
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">

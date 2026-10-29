@@ -38,6 +38,7 @@ export interface Job {
   rightsCleared: boolean; // human has acknowledged/cleared rights concerns
   templateId: string | null; // productized service template, when the job runs on one
   deliveredAt: string | null;
+  archivedAt: string | null; // set when a closed (delivered/rejected) job is filed away out of the pipeline
   createdAt: string;
   updatedAt: string;
 }

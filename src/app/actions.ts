@@ -99,6 +99,20 @@ export async function approveWorkflowAction(jobId: string, maxBudget: number) {
 export async function rejectJobAction(jobId: string, reason: string) {
   return run(jobId, () => studio.rejectJob(jobId, reason), "Job rejected.");
 }
+export async function archiveJobAction(jobId: string) {
+  return run(jobId, () => studio.archiveJob(jobId), "Job archived.");
+}
+export async function unarchiveJobAction(jobId: string) {
+  return run(jobId, () => studio.unarchiveJob(jobId), "Job restored to the pipeline.");
+}
+export async function archiveClosedJobsAction(): Promise<ActionResult> {
+  let n = 0;
+  const r = await run(null, async () => {
+    n = await studio.archiveClosedJobs();
+  });
+  revalidatePath("/jobs");
+  return r.ok ? { ok: true, message: n ? `Archived ${n} closed job${n === 1 ? "" : "s"}.` : "Nothing to archive." } : r;
+}
 export async function reopenJobAction(jobId: string) {
   return run(jobId, () => studio.reopenJob(jobId), "Job reopened for review.");
 }

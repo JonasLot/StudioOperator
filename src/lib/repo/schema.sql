@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   rights_cleared INTEGER NOT NULL DEFAULT 0,
   template_id TEXT,
   delivered_at TEXT,
+  archived_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
