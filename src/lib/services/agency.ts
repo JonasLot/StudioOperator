@@ -81,6 +81,7 @@ export async function upsertClientMemory(input: {
   rejectedStyles?: string[];
   deliveryPreferences?: string | null;
   communicationPreferences?: string | null;
+  billingDetails?: string | null;
 }): Promise<ClientMemory> {
   const repo = getRepo();
   const key = clientKey(input.displayName);
@@ -98,6 +99,7 @@ export async function upsertClientMemory(input: {
     rejectedStyles: input.rejectedStyles ?? existing?.rejectedStyles ?? [],
     deliveryPreferences: input.deliveryPreferences ?? existing?.deliveryPreferences ?? null,
     communicationPreferences: input.communicationPreferences ?? existing?.communicationPreferences ?? null,
+    billingDetails: input.billingDetails !== undefined ? input.billingDetails : (existing?.billingDetails ?? null),
     updatedAt: now(),
   };
   await repo.upsertClientMemory(m);

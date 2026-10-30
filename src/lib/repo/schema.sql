@@ -195,6 +195,7 @@ CREATE TABLE IF NOT EXISTS client_memory (
   rejected_styles TEXT NOT NULL DEFAULT '[]',
   delivery_preferences TEXT,
   communication_preferences TEXT,
+  billing_details TEXT,
   updated_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_client_memory_key ON client_memory(client_key);
@@ -307,3 +308,28 @@ CREATE TABLE IF NOT EXISTS saved_prompts (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- Invoices: what a client was billed for a job. A record the operator keeps; the app never sends it.
+-- `number` is NULL for drafts and assigned when sent. `lines` is JSON [{description, quantity, unitPrice}] in USD. Overdue is derived, never stored.
+CREATE TABLE IF NOT EXISTS invoices (
+  id TEXT PRIMARY KEY,
+  number TEXT,
+  job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  client_key TEXT NOT NULL,
+  client_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  lines TEXT NOT NULL DEFAULT '[]',
+  issue_date TEXT NOT NULL,
+  due_date TEXT NOT NULL,
+  notes TEXT,
+  sender TEXT,
+  bill_to TEXT,
+  sent_at TEXT,
+  paid_at TEXT,
+  voided_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_number ON invoices(number);
+CREATE INDEX IF NOT EXISTS idx_invoices_job ON invoices(job_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_key);

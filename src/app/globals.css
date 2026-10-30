@@ -142,3 +142,16 @@
   letter-spacing: 0.14em;
   color: var(--muted-foreground);
 }
+
+/* Printing (invoices): plain white paper, the app shell hidden via print:hidden. */
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+}

@@ -67,7 +67,7 @@ export const isMockForced = () => resolveMockForced(mockSetting(), process.env.S
 export const DEFAULT_STUDIO_NAME = "Independent studio";
 
 export function getProfile(): Profile & { saved: boolean } {
-  const fallback: Profile = { displayName: process.env.OPERATOR_NAME || "Operator", studioName: DEFAULT_STUDIO_NAME, email: "" };
+  const fallback: Profile = { displayName: process.env.OPERATOR_NAME || "Operator", studioName: DEFAULT_STUDIO_NAME, email: "", billingDetails: "" };
   const raw = read("profile");
   if (!raw) return { ...fallback, saved: false };
   try {
@@ -76,6 +76,7 @@ export function getProfile(): Profile & { saved: boolean } {
       displayName: p.displayName || fallback.displayName,
       studioName: p.studioName || fallback.studioName,
       email: p.email || "",
+      billingDetails: p.billingDetails || "",
       saved: true,
     };
   } catch {

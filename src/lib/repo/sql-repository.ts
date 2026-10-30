@@ -23,6 +23,7 @@ import type {
   Workflow,
   WorkflowStep,
 } from "@/lib/domain/types";
+import type { Invoice } from "@/lib/domain/invoice";
 import type { StudioRepository } from "./repository";
 
 // ---------- generic row <-> object mapping ----------
@@ -88,6 +89,7 @@ const SPEC = {
   feedback: {},
   creative: { json: ["brief", "thread"] },
   prompt: { json: ["tags"] },
+  invoice: { json: ["lines"] },
 } satisfies Record<string, FieldSpec>;
 
 // Additive column migrations for databases created before a column existed.
@@ -98,6 +100,7 @@ export const MIGRATIONS = [
   "ALTER TABLE generations ADD COLUMN review_note TEXT",
   "ALTER TABLE workflow_steps ADD COLUMN requires_review INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE jobs ADD COLUMN archived_at TEXT",
+  "ALTER TABLE client_memory ADD COLUMN billing_details TEXT",
 ];
 
 // ---------- repository ----------
@@ -476,10 +479,31 @@ export class SqlStudioRepository implements StudioRepository {
     await this.exec("UPDATE saved_prompts SET uses = uses + 1 WHERE id = ?", [id]);
   }
 
+  // --- invoices ---
+  async listInvoices() {
+    return await this.all<Invoice>("SELECT * FROM invoices ORDER BY issue_date DESC, number DESC", SPEC.invoice);
+  }
+  async listInvoicesForJob(jobId: string) {
+    return await this.all<Invoice>("SELECT * FROM invoices WHERE job_id = ? ORDER BY issue_date DESC, number DESC", SPEC.invoice, jobId);
+  }
+  async getInvoice(id: string) {
+    return await this.one<Invoice>("SELECT * FROM invoices WHERE id = ?", SPEC.invoice, id);
+  }
+  async insertInvoice(inv: Invoice) {
+    await this.insert("invoices", inv, SPEC.invoice);
+  }
+  async updateInvoice(id: string, patch: Partial<Invoice>) {
+    await this.patch("invoices", id, { ...patch, updatedAt: new Date().toISOString() }, SPEC.invoice);
+    return (await this.getInvoice(id))!;
+  }
+  async deleteInvoice(id: string) {
+    await this.exec("DELETE FROM invoices WHERE id = ?", [id]);
+  }
+
   async wipe() {
     await this.ready;
     await this.db.exec(
-      "DELETE FROM creative_briefs; DELETE FROM client_feedback; DELETE FROM client_shares; DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
+      "DELETE FROM invoices; DELETE FROM creative_briefs; DELETE FROM client_feedback; DELETE FROM client_shares; DELETE FROM escalations; DELETE FROM audit_log; DELETE FROM agent_messages; DELETE FROM client_memory; DELETE FROM autonomy_settings; DELETE FROM assets; DELETE FROM activity; DELETE FROM approvals; DELETE FROM revisions; DELETE FROM generations; DELETE FROM workflow_steps; DELETE FROM workflows; DELETE FROM intake_analyses; DELETE FROM jobs;",
     );
   }
 }

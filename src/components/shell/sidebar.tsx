@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, BookMarked, ChevronRight, FolderOpen, Layers, LayoutGrid, Settings2, ShieldCheck, Split, Images, UserRound } from "lucide-react";
+import { Bot, BookMarked, Building2, ChevronRight, FolderOpen, Layers, LayoutGrid, Settings2, ShieldCheck, Split, Images, UserRound } from "lucide-react";
 import { initials } from "@/lib/settings/rules";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutGrid, match: (p: string) => p === "/" },
   { href: "/jobs", label: "All jobs", icon: FolderOpen, match: (p: string) => p === "/jobs" || (p.startsWith("/jobs/") && p !== "/jobs/new") },
+  { href: "/clients", label: "Clients", icon: Building2, match: (p: string) => p.startsWith("/clients") || p.startsWith("/invoices") },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck, match: (p: string) => p.startsWith("/approvals"), badge: "approvals" as const },
   { href: "/outputs", label: "Outputs", icon: Images, match: (p: string) => p.startsWith("/outputs") },
   { href: "/prompts", label: "Prompts", icon: BookMarked, match: (p: string) => p.startsWith("/prompts") },

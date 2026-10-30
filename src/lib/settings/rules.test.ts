@@ -25,8 +25,8 @@ test("parseMockSetting ignores anything unexpected", () => {
 });
 
 test("validateProfile trims, requires names and checks the email", () => {
-  const ok = validateProfile({ displayName: "  Ada   Lovelace ", studioName: "North Studio", email: "" });
-  assert.deepEqual(ok, { ok: true, value: { displayName: "Ada Lovelace", studioName: "North Studio", email: "" } });
+  const ok = validateProfile({ displayName: "  Ada   Lovelace ", studioName: "North Studio", email: "", billingDetails: "  North Studio AS \r\n\n\n\n Org 123  456 \n" });
+  assert.deepEqual(ok, { ok: true, value: { displayName: "Ada Lovelace", studioName: "North Studio", email: "", billingDetails: "North Studio AS\n\nOrg 123 456" } });
   const bad = validateProfile({ displayName: "", studioName: "x".repeat(61), email: "nope" });
   assert.equal(bad.ok, false);
   if (!bad.ok) assert.deepEqual(Object.keys(bad.errors).sort(), ["displayName", "email", "studioName"]);

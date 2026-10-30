@@ -24,21 +24,36 @@ export interface Profile {
   displayName: string;
   studioName: string;
   email: string;
+  /** Printed as the sender on invoices: legal name, org number, address, payment details. Multi-line. */
+  billingDetails: string;
+}
+
+/** Tidy a multi-line block: trim each line, drop leading/trailing blank lines, cap runs of blank lines at one. */
+export function tidyBlock(v: unknown): string {
+  if (typeof v !== "string") return "";
+  return v
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export type ProfileResult = { ok: true; value: Profile } | { ok: false; errors: Partial<Record<keyof Profile, string>> };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export function validateProfile(input: { displayName?: unknown; studioName?: unknown; email?: unknown }): ProfileResult {
+export function validateProfile(input: { displayName?: unknown; studioName?: unknown; email?: unknown; billingDetails?: unknown }): ProfileResult {
   const text = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
-  const value: Profile = { displayName: text(input.displayName), studioName: text(input.studioName), email: text(input.email) };
+  const value: Profile = { displayName: text(input.displayName), studioName: text(input.studioName), email: text(input.email), billingDetails: tidyBlock(input.billingDetails) };
   const errors: Partial<Record<keyof Profile, string>> = {};
   if (!value.displayName) errors.displayName = "Add the name approvals should be recorded under.";
   else if (value.displayName.length > 60) errors.displayName = "Keep it under 60 characters.";
   if (!value.studioName) errors.studioName = "Give the studio a name.";
   else if (value.studioName.length > 60) errors.studioName = "Keep it under 60 characters.";
   if (value.email && (value.email.length > 120 || !EMAIL.test(value.email))) errors.email = "That doesn't look like an email address.";
+  if (value.billingDetails.length > 600) errors.billingDetails = "Keep it under 600 characters.";
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, value };
 }
 

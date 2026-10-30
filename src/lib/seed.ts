@@ -2,6 +2,7 @@ import "server-only";
 import { getRepo } from "@/lib/repo";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import * as agency from "@/lib/services/agency";
+import * as clients from "@/lib/services/clients";
 import { audit } from "@/lib/services/audit";
 import {
   addRevision,
@@ -323,6 +324,20 @@ export async function seedDemo() {
 
   await superviseGlass(glass);
   await superviseOrchard(orchard);
+
+  // Billing: Lumen Films paid a 50% deposit up front, invoiced and sent; the rest is billed on delivery.
+  await agency.upsertClientMemory({ displayName: "Lumen Films", billingDetails: "Lumen Films AS · Org. no. 912 345 678\nAttn: production office\nMøllergata 12, 0179 Oslo\nfaktura@lumenfilms.example" });
+  const deposit = await clients.createInvoiceForJob(orchard);
+  const issued = new Date(Date.now() - 10 * 86_400_000);
+  const issue = issued.toISOString().slice(0, 10);
+  await clients.updateDraftInvoice(deposit, {
+    lines: [{ description: "Orchard night film — 50% deposit", quantity: 1, unitPrice: 600 }],
+    issueDate: issue,
+    dueDate: new Date(issued.getTime() + 14 * 86_400_000).toISOString().slice(0, 10),
+    clientName: "Lumen Films",
+    notes: "Deposit as agreed. The balance is invoiced on delivery.",
+  });
+  await clients.markInvoiceSent(deposit);
 
   // 6. Fresh lead, not yet analysed.
   const libraryId = `job_seedlibrary${Date.now().toString(36).slice(-4)}`;

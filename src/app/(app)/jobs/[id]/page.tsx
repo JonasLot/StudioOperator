@@ -7,6 +7,8 @@ import { publicConfig } from "@/lib/config";
 import { SOURCE_LABEL } from "@/lib/domain/types";
 import { ensureSeeded } from "@/lib/seed";
 import { operatorClientView } from "@/lib/services/client-portal";
+import { keyForJob, listInvoicesForJob } from "@/lib/services/clients";
+import { cannotInvoice, isoDay, unbilledForJob } from "@/lib/domain/invoice";
 import { getCreativeBrief } from "@/lib/services/creative";
 import { listPrompts } from "@/lib/services/prompts";
 import { getBundle, profitabilityFor } from "@/lib/services/studio";
@@ -38,7 +40,8 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
   const bundle = await getBundle(id);
   if (!bundle) notFound();
   const { job, analysis, intake, workflow, generations, revisions, approvals } = bundle;
-  const [client, creative, prompts] = await Promise.all([operatorClientView(id), getCreativeBrief(id), listPrompts()]);
+  const [client, creative, prompts, invoices] = await Promise.all([operatorClientView(id), getCreativeBrief(id), listPrompts(), listInvoicesForJob(id)]);
+  const billing = { invoices, clientKey: keyForJob(job), unbilled: unbilledForJob(job, invoices), blockedReason: cannotInvoice(job, invoices), today: isoDay(new Date()) };
   const p = profitabilityFor(bundle);
   const cfg = publicConfig();
   const pending = approvals.filter((a) => a.status === "pending");
@@ -106,7 +109,7 @@ export default async function JobPage(props: PageProps<"/jobs/[id]">) {
               { value: "costs", label: "Costs", icon: <Receipt />, content: <CostsTab jobId={job.id} workflow={workflow} generations={generations} revisions={revisions} profitability={p} /> },
               { value: "outputs", label: "Outputs", icon: <Images />, count: completed || undefined, content: <OutputsTab job={job} workflow={workflow} generations={generations} revisions={revisions} /> },
               { value: "revisions", label: "Revisions", icon: <MessageSquareDiff />, count: revisions.length || undefined, content: <RevisionsTab job={job} analysis={analysis} revisions={revisions} profitability={p} generations={generations} /> },
-              { value: "client", label: "Client", icon: <Share2 />, count: client.feedback.length || undefined, content: <ClientTab job={job} share={client.share} feedback={client.feedback} /> },
+              { value: "client", label: "Client", icon: <Share2 />, count: client.feedback.length || undefined, content: <ClientTab job={job} share={client.share} feedback={client.feedback} billing={billing} /> },
             ]}
           />
         </div>

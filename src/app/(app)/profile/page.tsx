@@ -43,7 +43,7 @@ export default async function ProfilePage() {
               <p className="truncate text-[13px] text-muted-foreground">{profile.studioName}</p>
             </div>
           </div>
-          <ProfileForm defaults={{ displayName: profile.displayName, studioName: profile.studioName, email: profile.email }} />
+          <ProfileForm defaults={{ displayName: profile.displayName, studioName: profile.studioName, email: profile.email, billingDetails: profile.billingDetails }} />
         </Card>
         <div className="flex flex-col gap-6">
           <Card title="Session">

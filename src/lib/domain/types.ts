@@ -343,6 +343,7 @@ export interface ClientMemory {
   rejectedStyles: string[];
   deliveryPreferences: string | null;
   communicationPreferences: string | null;
+  billingDetails: string | null; // who and where to bill: company, org number, address, invoice email
   updatedAt: string;
 }
 

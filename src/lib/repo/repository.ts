@@ -18,6 +18,7 @@ import type {
   Workflow,
   WorkflowStep,
 } from "@/lib/domain/types";
+import type { Invoice } from "@/lib/domain/invoice";
 
 /**
  * Persistence boundary. Everything above this interface (services, UI) is storage-agnostic.
@@ -124,6 +125,14 @@ export interface StudioRepository {
   deletePrompt(id: string): Promise<void>;
   /** Count one more use without a read-modify-write, so two quick inserts do not lose one. */
   bumpPromptUses(id: string): Promise<void>;
+
+  // --- invoices ---
+  listInvoices(): Promise<Invoice[]>;
+  listInvoicesForJob(jobId: string): Promise<Invoice[]>;
+  getInvoice(id: string): Promise<Invoice | null>;
+  insertInvoice(inv: Invoice): Promise<void>;
+  updateInvoice(id: string, patch: Partial<Omit<Invoice, "id" | "jobId" | "createdAt">>): Promise<Invoice>;
+  deleteInvoice(id: string): Promise<void>;
 
   countJobs(): Promise<number>;
   wipe(): Promise<void>;

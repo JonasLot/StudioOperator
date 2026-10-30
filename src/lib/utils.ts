@@ -42,3 +42,11 @@ export function daysUntil(iso: string, from = new Date()) {
   const ms = new Date(iso).getTime() - from.getTime();
   return Math.ceil(ms / 86_400_000);
 }
+
+/** "30 Oct 2026" from an ISO date or YYYY-MM-DD day (read as a calendar day, never shifted by time zone). */
+export function longDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}

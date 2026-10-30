@@ -2,13 +2,16 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Check, Copy, ExternalLink, Link2 } from "lucide-react";
+import { ArrowUpRight, Check, Copy, ExternalLink, Link2 } from "lucide-react";
 import { createClientLinkAction, revokeClientLinkAction } from "@/app/actions";
 import { ActionButton } from "@/components/action-button";
+import { InvoiceStatusPill } from "@/components/billing";
+import { CreateInvoiceButton } from "@/components/create-invoice-button";
+import { displayStatus, invoiceTotal, type Invoice } from "@/lib/domain/invoice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ClientFeedback, ClientFeedbackKind, ClientShare, Job } from "@/lib/domain/types";
-import { dateTime } from "@/lib/utils";
+import { dateTime, shortDate, usd } from "@/lib/utils";
 import { Section } from "./section";
 
 const KIND: Record<ClientFeedbackKind, { label: string; variant: "ok" | "info" | "warn" | "outline" }> = {
@@ -20,7 +23,9 @@ const KIND: Record<ClientFeedbackKind, { label: string; variant: "ok" | "info" |
   comment: { label: "Note", variant: "outline" },
 };
 
-export function ClientTab({ job, share, feedback }: { job: Job; share: ClientShare | null; feedback: ClientFeedback[] }) {
+export type JobBilling = { invoices: Invoice[]; clientKey: string; unbilled: number; blockedReason: string | null; today: string };
+
+export function ClientTab({ job, share, feedback, billing }: { job: Job; share: ClientShare | null; feedback: ClientFeedback[]; billing: JobBilling }) {
   const [copied, setCopied] = React.useState(false);
   const origin = React.useSyncExternalStore(
     () => () => {},
@@ -79,6 +84,47 @@ export function ClientTab({ job, share, feedback }: { job: Job; share: ClientSha
             </ActionButton>
           </div>
         )}
+      </Section>
+
+      <Section
+        title="Invoices"
+        aside={
+          <Link href={`/clients/${billing.clientKey}`} className="inline-flex items-center gap-1 text-[12.5px] text-muted-foreground hover:text-foreground">
+            {job.clientName ?? "Unnamed client"} <ArrowUpRight className="size-3.5" />
+          </Link>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {billing.invoices.length ? (
+            <ul className="flex flex-col divide-y rounded-lg border">
+              {billing.invoices.map((inv) => (
+                <li key={inv.id}>
+                  <Link href={`/invoices/${inv.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/30">
+                    <span className="tnum w-24 text-[13.5px] font-medium">{inv.number ?? "Draft"}</span>
+                    <span className="text-[12.5px] text-muted-foreground">
+                      {shortDate(inv.issueDate)} · due {shortDate(inv.dueDate)}
+                    </span>
+                    <span className="ml-auto flex items-center gap-3">
+                      <span className="tnum text-[13.5px] font-semibold">{usd(invoiceTotal(inv), { cents: true })}</span>
+                      <InvoiceStatusPill status={displayStatus(inv, billing.today)} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[13px] text-muted-foreground">
+              {job.status === "rejected" || (billing.blockedReason && billing.unbilled === 0 && !billing.invoices.length)
+                ? billing.blockedReason
+                : billing.unbilled > 0
+                  ? `${usd(billing.unbilled, { cents: true })} of the ${usd(job.budget, { cents: true })} client price is not on an invoice yet.`
+                  : "The full client price is invoiced."}
+              {manual && job.status !== "rejected" ? " The marketplace bills this client; an invoice here is your own record." : ""}
+            </p>
+            {job.status !== "rejected" && billing.unbilled > 0 ? <CreateInvoiceButton jobId={job.id} blockedReason={billing.blockedReason} /> : null}
+          </div>
+        </div>
       </Section>
 
       <Section title="From the client" aside={feedback.length ? <span className="tnum text-[12px] text-muted-foreground">{feedback.length}</span> : null}>

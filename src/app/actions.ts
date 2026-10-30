@@ -11,6 +11,7 @@ import { GuardrailError } from "@/lib/services/guardrails";
 import { authEnabled, clearLoginFailures, endSession, loginBlockedForMs, recordLoginFailure, requireSession, startSession } from "@/lib/auth";
 import { safeNextPath } from "@/lib/auth/session";
 import * as clientPortal from "@/lib/services/client-portal";
+import * as clients from "@/lib/services/clients";
 import * as creative from "@/lib/services/creative";
 import * as prompts from "@/lib/services/prompts";
 import * as intake from "@/lib/services/intake";
@@ -233,6 +234,71 @@ export async function connectionTestAction(): Promise<ActionResult & { detail?: 
   const r = await studio.providerConnectionTest();
   return r.ok ? { ok: true, message: r.detail, detail: r.detail, providerName: r.name, live: r.live } : { ok: false, error: r.detail, detail: r.detail, providerName: r.name, live: r.live };
 }
+// --- clients & invoices ---------------------------------------------------------
+
+function revalidateBilling(jobId: string | null, clientKey: string | null) {
+  revalidatePath("/clients");
+  if (clientKey) revalidatePath(`/clients/${clientKey}`);
+  if (jobId) revalidatePath(`/jobs/${jobId}`);
+}
+
+export async function createInvoiceAction(jobId: string): Promise<ActionResult & { id?: string }> {
+  try {
+    await guard();
+    const id = await clients.createInvoiceForJob(jobId);
+    revalidateBilling(jobId, null);
+    return { ok: true, id };
+  } catch (err) {
+    if (err instanceof GuardrailError) return { ok: false, error: err.message };
+    console.error(err);
+    return { ok: false, error: (err as Error).message || "Could not create the invoice." };
+  }
+}
+
+async function invoiceRun(id: string, fn: () => Promise<unknown>, message?: string): Promise<ActionResult> {
+  try {
+    await guard();
+    const before = await clients.getInvoice(id);
+    await fn();
+    revalidatePath(`/invoices/${id}`);
+    revalidateBilling(before?.invoice.jobId ?? null, before?.invoice.clientKey ?? null);
+    return { ok: true, message };
+  } catch (err) {
+    if (err instanceof GuardrailError) return { ok: false, error: err.message };
+    console.error(err);
+    return { ok: false, error: (err as Error).message || "Something went wrong." };
+  }
+}
+
+export async function saveInvoiceDraftAction(id: string, input: { lines: { description: string; quantity: string; unitPrice: string }[]; issueDate: string; dueDate: string; clientName: string; notes: string }) {
+  return invoiceRun(id, () => clients.updateDraftInvoice(id, input), "Draft saved.");
+}
+export async function markInvoiceSentAction(id: string) {
+  return invoiceRun(id, () => clients.markInvoiceSent(id), "Marked as sent.");
+}
+export async function markInvoicePaidAction(id: string) {
+  return invoiceRun(id, () => clients.markInvoicePaid(id), "Marked as paid.");
+}
+export async function voidInvoiceAction(id: string) {
+  return invoiceRun(id, () => clients.voidInvoice(id), "Invoice voided.");
+}
+export async function deleteDraftInvoiceAction(id: string): Promise<ActionResult & { clientKey?: string }> {
+  const r = await invoiceRun(id, () => clients.deleteDraftInvoice(id));
+  return r;
+}
+export async function saveClientBillingAction(clientKey: string, billingDetails: string) {
+  try {
+    await guard();
+    await clients.saveClientBilling(clientKey, billingDetails);
+    revalidateBilling(null, clientKey);
+    return { ok: true, message: "Billing details saved." } as ActionResult;
+  } catch (err) {
+    if (err instanceof GuardrailError) return { ok: false, error: err.message } as ActionResult;
+    console.error(err);
+    return { ok: false, error: "Could not save the billing details." } as ActionResult;
+  }
+}
+
 export async function addRevisionAction(jobId: string, note: string, deliverable: string | null) {
   return run(jobId, () => studio.addRevision(jobId, note, deliverable), "Revision note logged.");
 }
@@ -432,11 +498,11 @@ export type ProfileState = { ok?: true; message?: string; error?: string; fieldE
 
 export async function saveProfileAction(_prev: ProfileState, form: FormData): Promise<ProfileState> {
   await guard();
-  const parsed = validateProfile({ displayName: form.get("displayName"), studioName: form.get("studioName"), email: form.get("email") });
+  const parsed = validateProfile({ displayName: form.get("displayName"), studioName: form.get("studioName"), email: form.get("email"), billingDetails: form.get("billingDetails") });
   if (!parsed.ok) {
     // Hand the typed values back so the form keeps them next to the errors.
     const text = (k: string) => String(form.get(k) ?? "");
-    return { error: "Check the highlighted fields.", fieldErrors: parsed.errors, values: { displayName: text("displayName"), studioName: text("studioName"), email: text("email") } };
+    return { error: "Check the highlighted fields.", fieldErrors: parsed.errors, values: { displayName: text("displayName"), studioName: text("studioName"), email: text("email"), billingDetails: text("billingDetails") } };
   }
   try {
     await saveProfile(parsed.value);
