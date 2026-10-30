@@ -296,7 +296,10 @@ export class SqlStudioRepository implements StudioRepository {
       : this.all<ApprovalRequest>("SELECT * FROM approvals ORDER BY created_at", SPEC.approval);
   }
   async countPendingApprovals() {
-    return Number((await this.rows("SELECT COUNT(*) AS n FROM approvals WHERE status = 'pending'"))[0].n);
+    // Archived jobs are filed away; anything still pending on them should not nag from the sidebar.
+    return Number(
+      (await this.rows("SELECT COUNT(*) AS n FROM approvals a JOIN jobs j ON j.id = a.job_id WHERE a.status = 'pending' AND j.archived_at IS NULL"))[0].n,
+    );
   }
   async getApproval(id: string) {
     return await this.one<ApprovalRequest>("SELECT * FROM approvals WHERE id = ?", SPEC.approval, id);

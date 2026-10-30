@@ -23,7 +23,8 @@ export default async function ApprovalsPage() {
   const repo = getRepo();
   const jobs = new Map((await repo.listJobs()).map((j) => [j.id, j]));
   const all = await repo.listApprovals();
-  const pending = all.filter((a) => a.status === "pending");
+  // Decisions on archived jobs are out of sight: pending ones no longer ask for attention. History keeps them.
+  const pending = all.filter((a) => a.status === "pending" && !jobs.get(a.jobId)?.archivedAt);
   const byJob = [...new Set(pending.map((a) => a.jobId))].map((id) => ({ job: jobs.get(id)!, items: pending.filter((a) => a.jobId === id) }));
   const history = all
     .filter((a) => a.status !== "pending")
